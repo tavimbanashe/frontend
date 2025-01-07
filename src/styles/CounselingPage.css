@@ -1,0 +1,257 @@
+/* General Counseling Page Layout */
+.counseling-page {
+    display: flex;
+    flex-direction: column;
+    margin-left: 250px; /* Adjust for sidebar */
+    margin-top: 60px; /* Adjust for top menu */
+    padding: 30px 40px;
+    background-color: var(--widget-bg-color);
+    color: var(--text-color);
+    font-family: 'Jost', sans-serif; /* Ensure Jost is applied globally */
+    min-height: calc(100vh - 60px);
+}
+
+/* Apply Jost font to all elements globally */
+*,
+*::before,
+*::after {
+    font-family: 'Jost', sans-serif !important; /* Apply to all elements */
+}
+
+/* Counseling Header */
+.counseling-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #eee;
+}
+
+.counseling-header h1 {
+    font-size: 32px;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+}
+
+/* Add Counselor Button */
+.add-counselor-button {
+    background-color: #1a73e8;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.add-counselor-button:hover {
+    background-color: #155bb5;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.add-counselor-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.4);
+}
+
+/* Counseling Table */
+.counseling-content {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.counseling-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    overflow-x: auto;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.counseling-table th,
+.counseling-table td {
+    border: 1px solid #ddd;
+    padding: 14px 18px;
+    text-align: left;
+    font-size: 15px;
+    color: #444;
+    font-family: 'Jost', sans-serif;
+    transition: background-color 0.3s ease;
+}
+
+.counseling-table th {
+    background-color: #f3f4f6;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 14px;
+}
+
+.counseling-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.counseling-table tr:hover {
+    background-color: #f0f7ff;
+}
+
+.counseling-table td {
+    position: relative;
+}
+
+/* Action Buttons as Icons */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.action-buttons button {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+/* Edit and Delete Icons */
+.edit-button {
+    color: #4caf50; /* Green for edit */
+}
+
+.edit-button i {
+    font-size: 18px;
+}
+
+.delete-button {
+    color: #f44336; /* Red for delete */
+}
+
+.delete-button i {
+    font-size: 18px;
+}
+
+.action-buttons button:hover {
+    transform: scale(1.1);
+}
+
+/* Tooltip */
+.action-buttons button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
+}
+
+/* Enhanced Search Bar */
+.search-container {
+    display: flex;
+    align-items: center;
+    background-color: #f5f7fa;
+    border-radius: 8px;
+    padding: 8px 16px;
+    width: 300px;
+    transition: all 0.3s ease;
+    font-family: 'Jost', sans-serif; /* Ensure Jost is applied to the search container */
+}
+
+.search-container input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 16px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    outline: none;
+    transition: all 0.3s ease;
+    background-color: #fff;
+    color: #333;
+    font-family: 'Jost', sans-serif; /* Ensure Jost is applied to the input */
+}
+
+.search-container input::placeholder {
+    color: #bbb;
+}
+
+.search-container input:focus {
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.3);
+}
+
+.clear-search {
+    background-color: transparent;
+    border: none;
+    color: #1a73e8;
+    cursor: pointer;
+    padding: 0 8px;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    font-family: 'Jost', sans-serif; /* Ensure Jost is applied to the button */
+}
+
+.clear-search:hover {
+    color: #155bb5;
+}
+
+.clear-search:focus {
+    outline: none;
+}
+
+/* Search Bar Responsiveness */
+@media (max-width: 768px) {
+    .counseling-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .search-container {
+        width: 100%;
+        margin-top: 10px;
+    }
+
+    .add-counselor-button {
+        margin-top: 10px;
+    }
+}
+
+/* Additional Hover and Focus Effects */
+.search-container:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.search-container:focus-within {
+    background-color: #fff;
+    border-color: #1a73e8;
+}
+
+/* Error Message Styling */
+.error-message {
+    color: #f44336;
+    font-size: 16px;
+    margin-top: 20px;
+    font-weight: 600;
+}
+
+.counselors-grid {
+    height: 500px; /* Adjusted height */
+    margin-bottom: 50px;
+}
+
+.sessions-grid {
+    height: 300px;
+}
