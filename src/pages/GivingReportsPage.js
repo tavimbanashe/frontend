@@ -29,7 +29,7 @@ const GivingReportsPage = () => {
         donorName: '',
     });
     const [filteredReports, setFilteredReports] = useState([]);
-    const [isAdding, setIsAdding] = useState(false);
+    const [isAdding, setIsAdding] = useState(false);  // To toggle add form visibility
     const [newGiving, setNewGiving] = useState({
         amount: '',
         giving_date: '',
@@ -106,7 +106,7 @@ const GivingReportsPage = () => {
             if (response.ok) {
                 const addedGiving = await response.json();
                 setReports((prev) => [...prev, addedGiving]);
-                setIsAdding(false);
+                setIsAdding(false);  // Hide the form after adding
                 setNewGiving({ amount: '', giving_date: '', type: '', notes: '' });
                 setSelectedMemberId('');
             } else {
@@ -176,10 +176,12 @@ const GivingReportsPage = () => {
                         <BarChart data={summary}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="category" />
-                            <YAxis />
+                            <YAxis domain={[0, getMaxYValue(summary)]} /> {/* Dynamically adjusting Y axis */}
                             <Tooltip />
                             <Legend />
-                            <Bar dataKey="total_amount" fill="#82ca9d" />
+                            {summary.map((data, index) => (
+                                <Bar key={index} dataKey="total_amount" fill={COLORS[index % COLORS.length]} />
+                            ))}
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -236,6 +238,47 @@ const GivingReportsPage = () => {
                             </option>
                         ))}
                     </select>
+                </div>
+
+                {/* Add Giving Form */}
+                {isAdding && (
+                    <div className="add-giving-form">
+                        <h3>Add New Giving</h3>
+                        <form onSubmit={handleAddGivingSubmit}>
+                            <input
+                                type="number"
+                                name="amount"
+                                placeholder="Amount"
+                                value={newGiving.amount}
+                                onChange={handleAddGivingChange}
+                            />
+                            <input
+                                type="date"
+                                name="giving_date"
+                                placeholder="Giving Date"
+                                value={newGiving.giving_date}
+                                onChange={handleAddGivingChange}
+                            />
+                            <input
+                                type="text"
+                                name="type"
+                                placeholder="Type"
+                                value={newGiving.type}
+                                onChange={handleAddGivingChange}
+                            />
+                            <textarea
+                                name="notes"
+                                placeholder="Notes"
+                                value={newGiving.notes}
+                                onChange={handleAddGivingChange}
+                            />
+                            <button type="submit">Submit</button>
+                            <button type="button" onClick={() => setIsAdding(false)}>Cancel</button>
+                        </form>
+                    </div>
+                )}
+                <div className="add-button">
+                    <button onClick={() => setIsAdding(true)}>Add New Giving</button>
                 </div>
             </main>
         </div>

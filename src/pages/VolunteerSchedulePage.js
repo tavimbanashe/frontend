@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/volunteerSchedulePage.css';
@@ -19,13 +19,8 @@ const VolunteerSchedulePage = () => {
 
     const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-    // Fetch schedules and members
-    useEffect(() => {
-        fetchSchedules();
-        fetchMembers();
-    }, []);
-
-    const fetchSchedules = async () => {
+    // Using useCallback to ensure functions are stable and avoid unnecessary re-renders
+    const fetchSchedules = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -39,9 +34,9 @@ const VolunteerSchedulePage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API_BASE_URL]);
 
-    const fetchMembers = async () => {
+    const fetchMembers = useCallback(async () => {
         try {
             const response = await fetch(`${API_BASE_URL}/api/members`);
             if (!response.ok) throw new Error('Failed to fetch members.');
@@ -51,7 +46,13 @@ const VolunteerSchedulePage = () => {
             console.error('Error fetching members:', err.message);
             setError('Error fetching members. Please try again.');
         }
-    };
+    }, [API_BASE_URL]);
+
+    // Fetch schedules and members once the component is mounted
+    useEffect(() => {
+        fetchSchedules();
+        fetchMembers();
+    }, [fetchSchedules, fetchMembers]);
 
     const handleFormChange = (e) => {
         const { name, value } = e.target;
