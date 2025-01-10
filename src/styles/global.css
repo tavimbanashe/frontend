@@ -1,0 +1,228 @@
+/* Reset/Normalize all elements to avoid unexpected behavior */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box; /* Ensure padding and border do not affect element size */
+}
+
+/* Global styles */
+body {
+    font-family: 'Jost', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #fffffff8; /* Light gray for the entire app */
+    color: #333; /* Dark gray for text */
+    height: 100vh; /* Full viewport height */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Anchor tags */
+a {
+    text-decoration: none; /* Remove underline from links */
+    color: inherit; /* Inherit color for links */
+}
+
+/* Remove bullet points from lists */
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* Full viewport height wrapper for the root */
+#root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+/* Set up a full-width container for main content */
+main {
+    flex-grow: 1; /* Allow main content to expand and fill available space */
+    padding: 10px; /* Add some padding to main content */
+}
+
+/* Body font size and line height for readability */
+body {
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+/* Responsive Design: Mobile-first approach */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px; /* Slightly smaller font size for smaller screens */
+    }
+    
+    main {
+        padding: 10px; /* Reduce padding on smaller screens */
+    }
+}
+/* Reset/Normalize all elements to avoid unexpected behavior */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;  
+    box-sizing: border-box; /* Ensure padding and border do not affect element size */
+}
+
+/* Global styles */
+body {
+    font-family: 'Jost', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #fffffff8; /* Light gray for the entire app */
+    color: #333; /* Dark gray for text */
+    height: 100vh; /* Full viewport height */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Anchor tags */
+a {
+    text-decoration: none; /* Remove underline from links */
+    color: inherit; /* Inherit color for links */
+}
+
+/* Remove bullet points from lists */
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* Full viewport height wrapper for the root */
+#root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+/* Set up a full-width container for main content */
+main {
+    flex-grow: 1; /* Allow main content to expand and fill available space */
+    padding: 10px; /* Add some padding to main content */
+}
+
+/* Body font size and line height for readability */
+body {
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+/* Responsive Design: Mobile-first approach */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px; /* Slightly smaller font size for smaller screens */
+    }
+    
+    main {
+        padding: 10px; /* Reduce padding on smaller screens */
+    }
+}
+
+/* Enhanced Interactivity */
+.widget {
+    cursor: move; /* Indicate drag-and-drop functionality */
+    transition: box-shadow 0.3s ease;
+}
+.widget:hover {
+    box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.2); /* Highlight on hover */
+}
+
+.draggable {
+    border: 2px dashed #888;
+}
+
+/* Advanced Search */
+.search-bar {
+    position: relative;
+    margin: 10px;
+    width: 100%;
+}
+.search-bar input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+.search-bar .suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    z-index: 10;
+}
+
+/* Notifications Panel */
+.notifications-panel {
+    position: fixed;
+    top: 60px;
+    right: 0;
+    width: 300px;
+    background-color: #fff;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+}
+.notifications-panel.open {
+    transform: translateX(0);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+/* Charts */
+.chart {
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s;
+}
+.chart:hover {
+    transform: scale(1.02);
+}
+
+/* Themes */
+:root {
+    --theme-primary: #6c5ce7;
+    --theme-secondary: #00cec9;
+}
+.theme-dark {
+    --theme-primary: #2d3436;
+    --theme-secondary: #636e72;
+}
+
+/* Rolnodee-Based Access Control */
+.hidden {
+    display: none;
+}
+
+/* Performance Enhancements */
+.lazy-load {
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+}
+.lazy-load.visible {
+    opacity: 1;
+}
+
+/* Security Enhancements */
+.secure-input {
+    border: 1px solid red;
+}
