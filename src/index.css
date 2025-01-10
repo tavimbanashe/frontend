@@ -1,0 +1,28 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Reset HTML, BODY, and #root to ensure full width and height */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%; /* Full viewport height */
+  width: 100%;  /* Full viewport width */
+  display: flex; /* Ensure flex layout */
+  flex-direction: column; /* Stack elements vertically */
+}
+
+/* Ensure #root takes up the full height of the page */
+
+
+/* You can add any custom styles below as required */

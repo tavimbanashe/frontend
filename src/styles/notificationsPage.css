@@ -1,0 +1,52 @@
+.page {
+    margin-left: 250px;
+    margin-top: 60px;
+    padding: 30px;
+    background-color: var(--widget-bg-color, #f9f9f9);
+    min-height: calc(100vh - 60px);
+    font-family: 'Jost', sans-serif;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.clear-button {
+    background-color: #d9534f;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.clear-button:hover {
+    background-color: #c9302c;
+}
+
+.notifications-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.notification-item {
+    background: white;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.notification-item.unread {
+    background-color: #f0f8ff;
+}
+
+.notification-item:hover {
+    background-color: #e6f7ff;
+}
