@@ -12,8 +12,6 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
 const locales = {
     'en-US': enUS,
 };
@@ -51,7 +49,7 @@ const CalendarPage = () => {
     useEffect(() => {
         const fetchEvents = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/calendar/events`);
+                const response = await fetch('/api/calendar/events');
                 const data = await response.json();
                 const formattedEvents = data.map((event) => ({
                     id: event.id,
@@ -75,7 +73,7 @@ const CalendarPage = () => {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/calendar/events`, {
+            const response = await fetch('/api/calendar/events', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(modalEvent),

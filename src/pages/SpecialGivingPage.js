@@ -4,9 +4,6 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/specialGivingPage.css';
 
-// API Base URL from the environment variable
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Default to localhost for development
-
 const SpecialGivingPage = () => {
     const [specialGivingData, setSpecialGivingData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -24,7 +21,7 @@ const SpecialGivingPage = () => {
     useEffect(() => {
         const fetchSpecialGiving = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/special-giving`);
+                const response = await fetch('/api/special-giving');
                 const data = await response.json();
                 setSpecialGivingData(data);
             } catch (error) {
@@ -36,7 +33,7 @@ const SpecialGivingPage = () => {
 
         const fetchDonors = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/members`);
+                const response = await fetch('/api/members');
                 const data = await response.json();
                 setDonors(data);
             } catch (error) {
@@ -74,7 +71,7 @@ const SpecialGivingPage = () => {
     const handleAddGivingSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_BASE_URL}/api/special-giving`, {
+            const response = await fetch('/api/special-giving', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newSpecialGiving),

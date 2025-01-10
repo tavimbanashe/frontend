@@ -8,8 +8,6 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { FaEdit, FaTrash } from 'react-icons/fa';
 import '../styles/members.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
 const MembersPage = () => {
     const [members, setMembers] = useState([]);
     const [dropdownData, setDropdownData] = useState({
@@ -28,11 +26,10 @@ const MembersPage = () => {
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
 
-    // Fetch members
     const fetchMembers = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members`);
+            const response = await fetch('/api/members');
             const data = await response.json();
             setMembers(data);
         } catch (error) {
@@ -43,10 +40,9 @@ const MembersPage = () => {
         }
     };
 
-    // Fetch dropdown data for member-related fields
     const fetchDropdownData = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members/dropdowns`);
+            const response = await fetch('/api/members/dropdowns');
             const data = await response.json();
             setDropdownData(data);
         } catch (error) {
@@ -101,13 +97,13 @@ const MembersPage = () => {
 
     const handleDeleteMember = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members/${memberToDelete}`, { method: 'DELETE' });
+            const response = await fetch(`/api/members/${memberToDelete}`, { method: 'DELETE' });
             if (!response.ok) {
                 throw new Error('Failed to delete member');
             }
             setSnackbarMessage('Member deleted successfully!');
             setSnackbarOpen(true);
-            fetchMembers(); // Reload members after deletion
+            fetchMembers();
         } catch (error) {
             setSnackbarMessage('Error deleting member');
             setSnackbarOpen(true);
@@ -119,7 +115,7 @@ const MembersPage = () => {
 
     const handleFormClose = () => {
         setIsFormOpen(false);
-        fetchMembers(); // Refresh member data after form submission
+        fetchMembers();
     };
 
     const handleClearSearch = () => setSearchQuery('');

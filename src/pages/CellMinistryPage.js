@@ -3,8 +3,6 @@ import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/CellMinistryPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
 const CellMinistryPage = () => {
     const [ministries, setMinistries] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,7 +20,7 @@ const CellMinistryPage = () => {
 
     const fetchMinistries = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/cell-ministries`);
+            const response = await fetch('/api/cell-ministries');
             const data = await response.json();
             setMinistries(data);
         } catch (error) {
@@ -32,7 +30,7 @@ const CellMinistryPage = () => {
 
     const fetchMembers = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members`);
+            const response = await fetch('/api/members');
             const data = await response.json();
             setMembers(data);
         } catch (error) {
@@ -48,8 +46,8 @@ const CellMinistryPage = () => {
     const handleSubmit = async () => {
         const method = formValues.id ? 'PUT' : 'POST';
         const url = formValues.id
-            ? `${API_BASE_URL}/api/cell-ministries/${formValues.id}`
-            : `${API_BASE_URL}/api/cell-ministries`;
+            ? `/api/cell-ministries/${formValues.id}`
+            : '/api/cell-ministries';
         try {
             const response = await fetch(url, {
                 method,

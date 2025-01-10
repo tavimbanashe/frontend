@@ -3,9 +3,6 @@ import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/volunteerSchedulePage.css';
 
-// API Base URL from the environment variable
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Default to localhost for development
-
 const VolunteerSchedulePage = () => {
     const [schedules, setSchedules] = useState([]);
     const [members, setMembers] = useState([]);
@@ -24,7 +21,7 @@ const VolunteerSchedulePage = () => {
 
     const fetchSchedules = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/volunteer-schedules`);
+            const response = await fetch('/api/volunteer-schedules');
             const data = await response.json();
             setSchedules(data);
         } catch (error) {
@@ -34,7 +31,7 @@ const VolunteerSchedulePage = () => {
 
     const fetchMembers = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members`);
+            const response = await fetch('/api/members');
             const data = await response.json();
             setMembers(data);
         } catch (error) {
@@ -48,7 +45,7 @@ const VolunteerSchedulePage = () => {
     };
 
     const handleSubmit = async () => {
-        const url = `${API_BASE_URL}/api/volunteer-schedules`;
+        const url = '/api/volunteer-schedules';
         const method = formValues.id ? 'PUT' : 'POST';
         const finalUrl = formValues.id ? `${url}/${formValues.id}` : url;
 
@@ -97,7 +94,7 @@ const VolunteerSchedulePage = () => {
                     </tbody>
                 </table>
                 {isModalOpen && (
-                    <div className="modal-overlay">
+                    <div className="modal">
                         <div className="modal-content">
                             <h2>Add/Edit Schedule</h2>
                             <select

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button, IconButton, Modal, Box, TextField } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import { Edit, Delete } from '@mui/icons-material';
@@ -7,20 +7,18 @@ import TopMenu from '../components/TopMenu';
 import '../styles/CounselingPage.css';
 
 const CounselingPage = () => {
-    const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
     const [counselors, setCounselors] = useState([]);
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState({ counselors: true, sessions: true });
     const [openModal, setOpenModal] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const [formData, setFormData] = useState({});
-    const [modalType, setModalType] = useState('counselor');
+    const [modalType, setModalType] = useState('counselor'); // 'counselor' or 'session'
 
-    const fetchCounselors = useCallback(async () => {
+    // Fetch counselors data
+    const fetchCounselors = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members/counseling/counselors`);
-            if (!response.ok) throw new Error('Failed to fetch counselors');
+            const response = await fetch('http://localhost:5000/api/members/counseling/counselors');
             const data = await response.json();
             setCounselors(data);
         } catch (error) {
@@ -28,12 +26,12 @@ const CounselingPage = () => {
         } finally {
             setLoading((prev) => ({ ...prev, counselors: false }));
         }
-    }, [API_BASE_URL]);
+    };
 
-    const fetchSessions = useCallback(async () => {
+    // Fetch sessions data
+    const fetchSessions = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/members/counseling/sessions`);
-            if (!response.ok) throw new Error('Failed to fetch sessions');
+            const response = await fetch('http://localhost:5000/api/members/counseling/sessions');
             const data = await response.json();
             setSessions(data);
         } catch (error) {
@@ -41,13 +39,14 @@ const CounselingPage = () => {
         } finally {
             setLoading((prev) => ({ ...prev, sessions: false }));
         }
-    }, [API_BASE_URL]);
+    };
 
     useEffect(() => {
         fetchCounselors();
         fetchSessions();
-    }, [fetchCounselors, fetchSessions]);
+    }, []);
 
+    // Open the modal for add/edit
     const handleOpenModal = (type, item = null) => {
         setModalType(type);
         setSelectedItem(item);
@@ -73,11 +72,12 @@ const CounselingPage = () => {
         setOpenModal(false);
     };
 
+    // Save data (mocked for now)
     const handleSave = async () => {
         const method = selectedItem ? 'PUT' : 'POST';
         const endpoint = selectedItem
-            ? `${API_BASE_URL}/api/members/counseling/${modalType === 'counselor' ? 'counselors' : 'sessions'}/${selectedItem.id}`
-            : `${API_BASE_URL}/api/members/counseling/${modalType === 'counselor' ? 'counselors' : 'sessions'}`;
+            ? `http://localhost:5000/api/members/counseling/${modalType === 'counselor' ? 'counselors' : 'sessions'}/${selectedItem.id}`
+            : `http://localhost:5000/api/members/counseling/${modalType === 'counselor' ? 'counselors' : 'sessions'}`;
 
         try {
             await fetch(endpoint, {
@@ -92,9 +92,10 @@ const CounselingPage = () => {
         }
     };
 
+    // Delete action
     const handleDelete = async (type, id) => {
         try {
-            await fetch(`${API_BASE_URL}/api/members/counseling/${type}/${id}`, {
+            await fetch(`http://localhost:5000/api/members/counseling/${type}/${id}`, {
                 method: 'DELETE',
             });
             type === 'counselors' ? fetchCounselors() : fetchSessions();
@@ -103,6 +104,7 @@ const CounselingPage = () => {
         }
     };
 
+    // DataGrid columns
     const counselorColumns = [
         { field: 'id', headerName: 'ID', width: 70 },
         { field: 'first_name', headerName: 'First Name', width: 150 },
@@ -161,11 +163,12 @@ const CounselingPage = () => {
                         Add Counselor
                     </Button>
                 </div>
+                {/* Increased height for the counselors' DataGrid */}
                 <DataGrid
                     rows={counselors}
                     columns={counselorColumns}
                     loading={loading.counselors}
-                    style={{ height: 500, marginBottom: 50 }}
+                    style={{ height: 500, marginBottom: 50 }} // Increased height to 500px
                 />
                 <div className="counseling-header">
                     <h1>Sessions</h1>
@@ -274,7 +277,7 @@ const CounselingPage = () => {
                                 />
                             </>
                         )}
-                        <Button variant="contained" onClick={handleSave} sx={{ mt: 2 }}>
+                        <Button variant="contained" onClick={handleSave}>
                             Save
                         </Button>
                     </Box>

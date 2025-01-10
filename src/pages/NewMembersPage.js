@@ -6,8 +6,6 @@ import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/newMembersPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Define the API base URL
-
 const NewMembersPage = () => {
     const [activeTab, setActiveTab] = useState('firstTimers');
     const [newMembers, setNewMembers] = useState([]);
@@ -26,7 +24,7 @@ const NewMembersPage = () => {
                     : '/api/members/new-converts';
 
             try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`); // Use the updated API_BASE_URL
+                const response = await fetch(endpoint);
                 const data = await response.json();
                 if (Array.isArray(data)) {
                     setNewMembers(data);
@@ -56,7 +54,7 @@ const NewMembersPage = () => {
     const handleDialogSave = async () => {
         const endpoint = `/api/members/${dialog.member.id}`;
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            const response = await fetch(endpoint, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dialog.member),
@@ -81,7 +79,7 @@ const NewMembersPage = () => {
         if (window.confirm(`Are you sure you want to delete member with ID: ${id}?`)) {
             const endpoint = activeTab === 'firstTimers' ? `/api/members/first-timers/${id}` : `/api/members/new-converts/${id}`;
             try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
+                const response = await fetch(endpoint, { method: 'DELETE' });
                 if (response.ok) {
                     setNewMembers((prev) => prev.filter((m) => m.id !== id));
                     setSnackbar({ open: true, message: 'Member deleted successfully!', severity: 'success' });

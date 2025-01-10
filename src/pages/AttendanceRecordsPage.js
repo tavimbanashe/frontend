@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/attendanceRecordsPage.css';
@@ -16,46 +16,31 @@ const AttendanceRecordsPage = () => {
         notes: '',
     });
 
-    const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
-    const fetchAttendanceRecords = useCallback(async () => {
-        const url = `${API_BASE_URL}/api/attendance/events`;
-        console.log('Fetching attendance records from:', url);
-
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            const data = await response.json();
-            setAttendanceRecords(data);
-        } catch (error) {
-            console.error('Error fetching attendance records:', error.message);
-        }
-    }, [API_BASE_URL]);
-
-    const fetchMembers = useCallback(async () => {
-        const url = `${API_BASE_URL}/api/members`;
-        console.log('Fetching members from:', url);
-
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            const data = await response.json();
-            setMembers(data);
-        } catch (error) {
-            console.error('Error fetching members:', error.message);
-        }
-    }, [API_BASE_URL]);
-
     useEffect(() => {
         fetchAttendanceRecords();
         fetchMembers();
-    }, [fetchAttendanceRecords, fetchMembers]);
+    }, []);
 
-    // The rest of the component remains unchanged
+    const fetchAttendanceRecords = async () => {
+        try {
+            const response = await fetch('/api/attendance');
+            const data = await response.json();
+            setAttendanceRecords(data);
+        } catch (error) {
+            console.error('Error fetching attendance records:', error);
+        }
+    };
+
+    const fetchMembers = async () => {
+        try {
+            const response = await fetch('/api/members');
+            const data = await response.json();
+            setMembers(data);
+        } catch (error) {
+            console.error('Error fetching members:', error);
+        }
+    };
+
     const handleSearchChange = (e) => {
         setSearchQuery(e.target.value);
     };
@@ -99,44 +84,33 @@ const AttendanceRecordsPage = () => {
 
     const handleSubmit = async () => {
         const method = editingRecord ? 'PUT' : 'POST';
-        const url = editingRecord
-            ? `${API_BASE_URL}/api/attendance/${editingRecord}`
-            : `${API_BASE_URL}/api/attendance`;
-
-        console.log('Submitting form to:', url);
-
+        const url = editingRecord ? `/api/attendance/${editingRecord}` : '/api/attendance';
         try {
             const response = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formValues),
             });
-
             if (response.ok) {
                 fetchAttendanceRecords();
                 setIsModalOpen(false);
             } else {
-                console.error('Error saving attendance record. Status:', response.status);
+                console.error('Error saving attendance record');
             }
         } catch (error) {
-            console.error('Error saving attendance record:', error.message);
+            console.error('Error saving attendance record:', error);
         }
     };
 
     const handleDeleteRecord = async (id) => {
         if (window.confirm('Are you sure you want to delete this record?')) {
-            const url = `${API_BASE_URL}/api/attendance/${id}`;
-            console.log('Deleting record from:', url);
-
             try {
-                const response = await fetch(url, { method: 'DELETE' });
+                const response = await fetch(`/api/attendance/${id}`, { method: 'DELETE' });
                 if (response.ok) {
                     fetchAttendanceRecords();
-                } else {
-                    console.error('Error deleting attendance record. Status:', response.status);
                 }
             } catch (error) {
-                console.error('Error deleting attendance record:', error.message);
+                console.error('Error deleting attendance record:', error);
             }
         }
     };

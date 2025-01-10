@@ -19,9 +19,6 @@ import jsPDF from 'jspdf'; // For PDF export
 import 'jspdf-autotable'; // For PDF tables
 import '../styles/givingReportsPage.css';
 
-// Define a constant for the base API URL
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE'];
 
 const GivingReportsPage = () => {
@@ -48,8 +45,8 @@ const GivingReportsPage = () => {
     useEffect(() => {
         const fetchReports = async () => {
             try {
-                const reportsResponse = await fetch(`${API_BASE_URL}/api/giving-reports`);
-                const summaryResponse = await fetch(`${API_BASE_URL}/api/giving-reports/summary`);
+                const reportsResponse = await fetch('/api/giving-reports');
+                const summaryResponse = await fetch('/api/giving-reports/summary');
 
                 const reportsData = await reportsResponse.json();
                 const summaryData = await summaryResponse.json();
@@ -63,7 +60,7 @@ const GivingReportsPage = () => {
 
         const fetchMembers = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/members`);  // Adjust the endpoint as needed
+                const response = await fetch('/api/members');  // Adjust the endpoint as needed
                 const membersData = await response.json();
                 setMembers(membersData);  // Assuming the response is an array of member objects
             } catch (error) {
@@ -103,7 +100,7 @@ const GivingReportsPage = () => {
     const handleAddGivingSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_BASE_URL}/api/giving-reports`, {
+            const response = await fetch('/api/giving-reports', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -325,15 +322,7 @@ const GivingReportsPage = () => {
                             <YAxis domain={[0, getMaxYValue(summary) * 1.1]} /> {/* Dynamically scale Y-Axis */}
                             <Tooltip />
                             <Legend />
-                            {summary.map((item, index) => (
-                                <Bar
-                                    key={item.type}
-                                    dataKey="total_amount"
-                                    fill={COLORS[index % COLORS.length]} // Using COLORS array
-                                />
-                            ))}
-                            {/* Add a reference line, for example, the average donation amount */}
-                            <ReferenceLine y={100} label="Target Amount" stroke="red" />
+                            <Bar dataKey="total_amount" fill="#82ca9d" />
                         </BarChart>
                     </ResponsiveContainer>
                 </section>
@@ -351,8 +340,7 @@ const GivingReportsPage = () => {
                             <XAxis dataKey="giving_date" />
                             <YAxis />
                             <Tooltip />
-                            <Line type="monotone" dataKey="amount" stroke={COLORS[0]} />
-                            {/* You can add ReferenceLines here as well, for example, to show specific milestones */}
+                            <Line type="monotone" dataKey="amount" stroke="#8884d8" />
                         </LineChart>
                     </ResponsiveContainer>
                 </section>

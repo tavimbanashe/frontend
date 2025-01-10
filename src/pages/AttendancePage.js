@@ -30,9 +30,9 @@ const AttendancePage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const eventsResponse = await fetch(`${API_BASE_URL}/api/attendance/events`);
-                const attendanceResponse = await fetch(`${API_BASE_URL}/api/attendance/records`);
-                const membersResponse = await fetch(`${API_BASE_URL}/api/members`);
+                const eventsResponse = await fetch('/api/attendance/events');
+                const attendanceResponse = await fetch('/api/attendance/records');
+                const membersResponse = await fetch('/api/members');
                 setEvents(await eventsResponse.json());
                 setAttendanceRecords(await attendanceResponse.json());
                 setMembers(await membersResponse.json());
@@ -45,7 +45,7 @@ const AttendancePage = () => {
 
     const handleEventSubmit = async () => {
         try {
-            const response = await fetch((`${API_BASE_URL}/api/attendance/events`), {
+            const response = await fetch('/api/attendance/events', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newEvent),
@@ -65,7 +65,7 @@ const AttendancePage = () => {
 
     const handleAttendanceSubmit = async () => {
         try {
-            const response = await fetch((`${API_BASE_URL}/api/attendance/records`), {
+            const response = await fetch('/api/attendance/records', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newAttendance),

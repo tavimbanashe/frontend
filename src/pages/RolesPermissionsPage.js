@@ -6,26 +6,25 @@ import { IconButton, TextField, Button } from '@mui/material';
 import { Edit, Delete } from '@mui/icons-material';
 import '../styles/rolesPermissionsPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Use environment variable for the API base URL
-
 const RolesPermissionsPage = () => {
-    const [roles, setRoles] = useState([]); // Holds the list of roles
-    const [rolePermissions, setRolePermissions] = useState([]); // Holds permissions for selected role
-    const [selectedRole, setSelectedRole] = useState(null); // Stores the selected role
-    const [isRoleModalOpen, setIsRoleModalOpen] = useState(false); // Modal visibility for role
-    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false); // Modal visibility for permission
-    const [editMode, setEditMode] = useState(false); // Flag for edit mode
-    const [roleForm, setRoleForm] = useState({ role_id: null, role_name: '' }); // Role form data
-    const [newPermission, setNewPermission] = useState(''); // New permission to add
+    const [roles, setRoles] = useState([]);
+    const [permissions, setPermissions] = useState([]);
+    const [rolePermissions, setRolePermissions] = useState([]);
+    const [selectedRole, setSelectedRole] = useState(null);
+    const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+    const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+    const [editMode, setEditMode] = useState(false);
+    const [roleForm, setRoleForm] = useState({ role_id: null, role_name: '' });
+    const [newPermission, setNewPermission] = useState('');
 
-    // Fetch roles
+    // Fetch roles and permissions
     useEffect(() => {
         fetchRoles();
     }, []);
 
     const fetchRoles = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/roles-permissions/roles`);
+            const response = await fetch('/api/roles-permissions/roles');
             const data = await response.json();
             setRoles(data.map((role) => ({ ...role, id: role.role_id })));
         } catch (error) {
@@ -33,11 +32,10 @@ const RolesPermissionsPage = () => {
         }
     };
 
-    // Fetch permissions for the selected role
     const handleRoleSelect = async (roleId) => {
         setSelectedRole(roleId);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/roles-permissions/role-permissions/${roleId}`);
+            const response = await fetch(`/api/roles-permissions/role-permissions/${roleId}`);
             const data = await response.json();
             setRolePermissions(data.map((permission, index) => ({ ...permission, id: index })));
         } catch (error) {
@@ -45,12 +43,11 @@ const RolesPermissionsPage = () => {
         }
     };
 
-    // Add or edit role
     const handleAddOrEditRole = async () => {
         const method = editMode ? 'PUT' : 'POST';
         const url = editMode
-            ? `${API_BASE_URL}/api/roles-permissions/roles/${roleForm.role_id}`
-            : `${API_BASE_URL}/api/roles-permissions/roles`;
+            ? `/api/roles-permissions/roles/${roleForm.role_id}`
+            : '/api/roles-permissions/roles';
 
         try {
             const response = await fetch(url, {
@@ -72,12 +69,11 @@ const RolesPermissionsPage = () => {
         }
     };
 
-    // Delete role
     const handleDeleteRole = async (roleId) => {
         if (!window.confirm('Are you sure you want to delete this role?')) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/roles-permissions/roles/${roleId}`, { method: 'DELETE' });
+            const response = await fetch(`/api/roles-permissions/roles/${roleId}`, { method: 'DELETE' });
             if (response.ok) {
                 fetchRoles();
                 if (selectedRole === roleId) {
@@ -92,12 +88,11 @@ const RolesPermissionsPage = () => {
         }
     };
 
-    // Add permission to selected role
     const handleAddPermission = async () => {
         if (!selectedRole || !newPermission) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/roles-permissions/role-permissions`, {
+            const response = await fetch('/api/roles-permissions/role-permissions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role_id: selectedRole, permission_name: newPermission }),
@@ -115,17 +110,16 @@ const RolesPermissionsPage = () => {
         }
     };
 
-    // Delete permission from selected role
     const handleDeletePermission = async (permissionId) => {
         if (!window.confirm('Are you sure you want to remove this permission?')) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/api/roles-permissions/role-permissions/${permissionId}`, {
+            const response = await fetch(`/api/roles-permissions/role-permissions/${permissionId}`, {
                 method: 'DELETE',
             });
 
             if (response.ok) {
-                handleRoleSelect(selectedRole); // Refresh permissions for the selected role
+                handleRoleSelect(selectedRole);
             } else {
                 console.error('Error deleting permission.');
             }
@@ -134,7 +128,6 @@ const RolesPermissionsPage = () => {
         }
     };
 
-    // Define columns for roles grid
     const roleColumns = [
         { field: 'role_id', headerName: 'Role ID', width: 100 },
         { field: 'role_name', headerName: 'Role Name', width: 200 },
@@ -162,7 +155,6 @@ const RolesPermissionsPage = () => {
         },
     ];
 
-    // Define columns for permissions grid
     const permissionColumns = [
         { field: 'permission_name', headerName: 'Permission Name', width: 250 },
         {

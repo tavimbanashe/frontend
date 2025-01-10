@@ -4,9 +4,6 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/tithesPage.css';
 
-// API Base URL from the environment variable
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Default to localhost for development
-
 const TithesPage = () => {
     const [tithes, setTithes] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -24,7 +21,7 @@ const TithesPage = () => {
         const fetchTithes = async () => {
             setLoading(true);
             try {
-                const response = await fetch(`${API_BASE_URL}/api/tithes`);
+                const response = await fetch('/api/tithes');
                 const data = await response.json();
                 setTithes(data);
             } catch (error) {
@@ -36,7 +33,7 @@ const TithesPage = () => {
 
         const fetchMembers = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/members`);
+                const response = await fetch('/api/members');
                 const data = await response.json();
                 setMembers(data);
             } catch (error) {
@@ -56,7 +53,7 @@ const TithesPage = () => {
     const handleAddTitheSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_BASE_URL}/api/tithes`, {
+            const response = await fetch('/api/tithes', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

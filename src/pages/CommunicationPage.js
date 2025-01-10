@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DataGrid } from '@mui/x-data-grid';
 import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/communicationPage.css';
-import { Button, TextField, Typography, Box, CircularProgress } from '@mui/material';
+import { Button, TextField, Typography, Box } from '@mui/material';
 
 const CommunicationPage = () => {
     const [logs, setLogs] = useState([]);
@@ -14,41 +14,38 @@ const CommunicationPage = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
     // Fetch recipients
-    const fetchRecipients = useCallback(async () => {
+    const fetchRecipients = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/communication/recipients`);
+            const response = await fetch('/api/communication/recipients');
             if (!response.ok) throw new Error('Failed to fetch recipients');
             const data = await response.json();
             setRecipients(data);
         } catch (err) {
             setError(err.message);
         }
-    }, [API_BASE_URL]);
+    };
 
     // Fetch logs
-    const fetchLogs = useCallback(async () => {
+    const fetchLogs = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/communication/logs`);
+            const response = await fetch('/api/communication/logs');
             if (!response.ok) throw new Error('Failed to fetch logs');
             const data = await response.json();
             setLogs(data);
         } catch (err) {
             setError(err.message);
         }
-    }, [API_BASE_URL]);
+    };
 
     useEffect(() => {
         fetchRecipients();
         fetchLogs();
-    }, [fetchRecipients, fetchLogs]); // Include the functions as dependencies
+    }, []);
 
     const handleSendEmail = async () => {
-        setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/communication/send/email`, {
+            const response = await fetch('/api/communication/send/email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subject: emailSubject, message: emailMessage }),
@@ -58,15 +55,12 @@ const CommunicationPage = () => {
             fetchLogs(); // Refresh logs
         } catch (err) {
             setError(err.message);
-        } finally {
-            setIsLoading(false);
         }
     };
 
     const handleSendSMS = async () => {
-        setIsLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/communication/send/sms`, {
+            const response = await fetch('/api/communication/send/sms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: smsMessage }),
@@ -76,8 +70,6 @@ const CommunicationPage = () => {
             fetchLogs(); // Refresh logs
         } catch (err) {
             setError(err.message);
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -101,12 +93,6 @@ const CommunicationPage = () => {
                         Communication Module
                     </Typography>
                 </header>
-
-                {error && (
-                    <Box sx={{ marginBottom: 2, backgroundColor: '#f44336', color: 'white', padding: 1, borderRadius: 1 }}>
-                        <Typography variant="body1">{error}</Typography>
-                    </Box>
-                )}
 
                 <section className="message-section">
                     <Typography variant="h6">Send Email</Typography>
@@ -135,7 +121,7 @@ const CommunicationPage = () => {
                         disabled={isLoading}
                         style={{ marginTop: '10px' }}
                     >
-                        {isLoading ? <CircularProgress size={24} /> : 'Send Email'}
+                        Send Email
                     </Button>
                 </section>
 
@@ -158,7 +144,7 @@ const CommunicationPage = () => {
                         disabled={isLoading}
                         style={{ marginTop: '10px' }}
                     >
-                        {isLoading ? <CircularProgress size={24} /> : 'Send SMS'}
+                        Send SMS
                     </Button>
                 </section>
 

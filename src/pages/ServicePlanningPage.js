@@ -4,8 +4,6 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/servicePlanningPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Dynamic API base URL
-
 const ServicePlanningPage = () => {
     const [services, setServices] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -20,7 +18,7 @@ const ServicePlanningPage = () => {
     useEffect(() => {
         const fetchServices = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/service-planning`);
+                const response = await fetch('/api/service-planning');
                 const data = await response.json();
                 setServices(data);
             } catch (error) {
@@ -56,7 +54,7 @@ const ServicePlanningPage = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_BASE_URL}/api/service-planning`, {
+            const response = await fetch('/api/service-planning', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -4,8 +4,6 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/onlineGivingPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Define the API base URL
-
 const OnlineGivingPage = () => {
     const [donations, setDonations] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,7 +20,7 @@ const OnlineGivingPage = () => {
     useEffect(() => {
         const fetchDonations = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/online-giving`); // Use the updated API_BASE_URL
+                const response = await fetch('/api/online-giving');
                 if (response.ok) {
                     const data = await response.json();
                     setDonations(data);
@@ -44,7 +42,7 @@ const OnlineGivingPage = () => {
     const handleAddDonation = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_BASE_URL}/api/online-giving`, { // Use the updated API_BASE_URL
+            const response = await fetch('/api/online-giving', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newDonation),

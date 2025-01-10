@@ -5,8 +5,6 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/reportsanalyticsPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Use the base URL from the environment variable
-
 const ReportsAnalyticsPage = () => {
     const [data, setData] = useState([]);
     const [filters, setFilters] = useState({ startDate: '', endDate: '', reportType: '' });
@@ -19,7 +17,7 @@ const ReportsAnalyticsPage = () => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const response = await fetch(`${API_BASE_URL}/api/reports-analytics`); // Use the updated API_BASE_URL
+                const response = await fetch('/api/reports-analytics');
                 const result = await response.json();
 
                 // Log the result to confirm the data format
@@ -28,7 +26,7 @@ const ReportsAnalyticsPage = () => {
                 // Check if result is an array, otherwise set to empty array
                 if (Array.isArray(result)) {
                     setData(result);
-                    setFilteredData(result); // Initialize filtered data with the full dataset
+                    setFilteredData(result);
                 } else {
                     throw new Error('Data format is not an array');
                 }
@@ -44,7 +42,7 @@ const ReportsAnalyticsPage = () => {
     }, []);
 
     // Apply Filters
-    useEffect(() => {
+    const applyFilters = () => {
         if (!Array.isArray(data)) return; // If data is not an array, do nothing
 
         const filtered = data.filter((item) => {
@@ -53,8 +51,12 @@ const ReportsAnalyticsPage = () => {
             const matchesType = !filters.reportType || item.type.includes(filters.reportType);
             return matchesStartDate && matchesEndDate && matchesType;
         });
-        setFilteredData(filtered); // Update filtered data based on filters
-    }, [filters, data]); // Dependency array includes filters and data
+        setFilteredData(filtered);
+    };
+
+    useEffect(() => {
+        applyFilters();
+    }, [filters, data]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -104,6 +106,12 @@ const ReportsAnalyticsPage = () => {
                             <option value="Giving">Giving</option>
                             <option value="Membership">Membership</option>
                         </select>
+                        <button
+                            className="apply-filters-button"
+                            onClick={applyFilters}
+                        >
+                            Apply Filters
+                        </button>
                     </div>
                 </section>
 

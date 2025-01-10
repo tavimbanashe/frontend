@@ -4,17 +4,13 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/giving.css';
 
-// Use the API_BASE_URL from environment variables
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
 const GivingPage = () => {
     const [givingData, setGivingData] = useState([]);
 
-    // Fetch giving data from API
     useEffect(() => {
         const fetchGivingData = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/giving`);
+                const response = await fetch('/api/giving');
                 const data = await response.json();
                 setGivingData(data);
             } catch (error) {

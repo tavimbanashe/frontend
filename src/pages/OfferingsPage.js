@@ -4,8 +4,6 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/offeringsPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Define the API base URL
-
 const OfferingsPage = () => {
     const [offerings, setOfferings] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,7 +21,7 @@ const OfferingsPage = () => {
 
     const fetchOfferings = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/offerings`); // Use the updated API_BASE_URL
+            const response = await fetch('/api/offerings');
             const data = await response.json();
             setOfferings(data);
         } catch (error) {
@@ -38,7 +36,7 @@ const OfferingsPage = () => {
 
     const handleSaveOffering = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/offerings`, { // Use the updated API_BASE_URL
+            const response = await fetch('/api/offerings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newOffering),

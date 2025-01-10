@@ -7,9 +7,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import '../styles/expenseTrackingPage.css';
 
-// Use the API_BASE_URL from environment variables
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000';
-
 const ExpenseTrackingPage = () => {
     const [expenses, setExpenses] = useState([]);
     const [filters, setFilters] = useState({
@@ -26,11 +23,10 @@ const ExpenseTrackingPage = () => {
         expense_date: '',
     });
 
-    // Fetch expenses from API
     useEffect(() => {
         const fetchExpenses = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/expenses`);
+                const response = await fetch('/api/expenses');
                 const data = await response.json();
                 setExpenses(data);
             } catch (error) {
@@ -40,7 +36,6 @@ const ExpenseTrackingPage = () => {
         fetchExpenses();
     }, []);
 
-    // Apply filters to expenses
     useEffect(() => {
         const filtered = expenses.filter((expense) => {
             const matchesDate =
@@ -65,10 +60,9 @@ const ExpenseTrackingPage = () => {
         setFilters((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Handle adding a new expense
     const handleAddExpense = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/expenses`, {
+            const response = await fetch('/api/expenses', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newExpense),
@@ -86,7 +80,6 @@ const ExpenseTrackingPage = () => {
         }
     };
 
-    // Export filtered expenses to CSV
     const exportToCSV = () => {
         const headers = ['Category', 'Description', 'Amount', 'Date'];
         const rows = filteredExpenses.map((expense) => [
@@ -106,7 +99,6 @@ const ExpenseTrackingPage = () => {
         link.click();
     };
 
-    // Export filtered expenses to Excel
     const exportToExcel = () => {
         const rows = filteredExpenses.map((expense) => ({
             Category: expense.category,
@@ -121,7 +113,6 @@ const ExpenseTrackingPage = () => {
         XLSX.writeFile(workbook, `expenses_${new Date().toISOString()}.xlsx`);
     };
 
-    // Export filtered expenses to PDF
     const exportToPDF = () => {
         const doc = new jsPDF();
         doc.setFontSize(18);

@@ -3,8 +3,6 @@ import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/serviceAgendaPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Dynamic API base URL
-
 const ServiceAgendaPage = () => {
     const [agendas, setAgendas] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,7 +19,7 @@ const ServiceAgendaPage = () => {
     useEffect(() => {
         const fetchAgendas = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/service-agenda`);
+                const response = await fetch('/api/service-agenda');
                 const data = await response.json();
                 setAgendas(data);
             } catch (error) {
@@ -33,7 +31,7 @@ const ServiceAgendaPage = () => {
 
     const handleAgendaSubmit = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/service-agenda`, {
+            const response = await fetch('/api/service-agenda', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newAgenda),

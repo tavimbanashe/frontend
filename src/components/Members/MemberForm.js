@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Snackbar, Alert } from '@mui/material';
 import '../../styles/memberForm.css';
 
@@ -18,17 +18,11 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
         department_id: '',
         notes: '',
         profile_picture_url: '',
+        ...initialData,
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: '' });
-
-    // Load initial data into the form
-    useEffect(() => {
-        if (initialData) {
-            setFormData((prevData) => ({ ...prevData, ...initialData }));
-        }
-    }, [initialData]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -40,23 +34,41 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
         setIsSubmitting(true);
 
         try {
+            const url = `${process.env.REACT_APP_API_BASE_URL}/members${formData.id ? `/${formData.id}` : ''}`;
             const method = formData.id ? 'PUT' : 'POST';
-            const url = `/api/members${formData.id ? `/${formData.id}` : ''}`;
             const response = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    address: formData.address,
+                    date_of_birth: formData.date_of_birth,
+                    gender_id: formData.gender_id,
+                    member_type_id: formData.member_type_id,
+                    group_id: formData.group_id,
+                    department_id: formData.department_id,
+                    notes: formData.notes,
+                    profile_picture_url: formData.profile_picture_url,
+                }),
             });
 
-            if (response.ok) {
-                const result = await response.json();
-                setSnackbar({ open: true, message: 'Member saved successfully!', severity: 'success' });
-                onSubmit?.(result); // Optional callback for parent component
-                onClose(); // Close the form after a successful save
-            } else {
+            if (!response.ok) {
                 const errorResponse = await response.json();
-                throw new Error(errorResponse.message || 'An error occurred while saving');
+                throw new Error(errorResponse.message || "Failed to save member.");
             }
+
+            const result = await response.json();
+            setSnackbar({
+                open: true,
+                message: `Member ${formData.id ? 'updated' : 'added'} successfully!`,
+                severity: 'success',
+            });
+
+            onSubmit(result); // Pass the result to the parent component
+            onClose();
         } catch (error) {
             console.error('Error saving member:', error.message);
             setSnackbar({ open: true, message: error.message, severity: 'error' });
@@ -74,7 +86,6 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
             <div className="member-form">
                 <h2>{formData.id ? 'Edit Member' : 'Add Member'}</h2>
                 <form onSubmit={handleSubmit}>
-                    {/* Text Inputs */}
                     <input
                         type="text"
                         name="first_name"
@@ -115,11 +126,11 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
                     <input
                         type="date"
                         name="date_of_birth"
+                        placeholder="Select the date of birth"
                         value={formData.date_of_birth}
                         onChange={handleChange}
                     />
 
-                    {/* Dropdown Selects */}
                     <select
                         name="gender_id"
                         value={formData.gender_id}
@@ -174,7 +185,6 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
                         ))}
                     </select>
 
-                    {/* Notes */}
                     <textarea
                         name="notes"
                         placeholder="Add any additional notes about the member"
@@ -182,7 +192,6 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
                         onChange={handleChange}
                     ></textarea>
 
-                    {/* Profile Picture */}
                     <input
                         type="text"
                         name="profile_picture_url"
@@ -191,7 +200,6 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
                         onChange={handleChange}
                     />
 
-                    {/* Submit and Cancel Buttons */}
                     <div className="form-buttons">
                         <button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? 'Saving...' : formData.id ? 'Update Member' : 'Add Member'}
@@ -203,7 +211,6 @@ const MemberForm = ({ onClose, initialData = {}, dropdownData = {}, onSubmit }) 
                 </form>
             </div>
 
-            {/* Snackbar Notifications */}
             <Snackbar
                 open={snackbar.open}
                 autoHideDuration={6000}

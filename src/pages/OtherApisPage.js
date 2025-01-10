@@ -3,8 +3,6 @@ import Sidebar from '../components/Dashboard/Sidebar';
 import TopMenu from '../components/TopMenu';
 import '../styles/otherApisPage.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Define the API base URL
-
 const OtherApisPage = () => {
     const [weatherData, setWeatherData] = useState(null);
     const [jokeData, setJokeData] = useState(null);
@@ -15,7 +13,7 @@ const OtherApisPage = () => {
     const fetchWeatherData = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/weather`); // Use the updated API_BASE_URL
+            const response = await fetch('/api/weather');
             if (!response.ok) throw new Error('Failed to fetch weather data');
             const data = await response.json();
             setWeatherData(data);
@@ -30,7 +28,7 @@ const OtherApisPage = () => {
     const fetchJokeData = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/api/jokes`); // Use the updated API_BASE_URL
+            const response = await fetch('/api/jokes');
             if (!response.ok) throw new Error('Failed to fetch joke data');
             const data = await response.json();
             setJokeData(data);

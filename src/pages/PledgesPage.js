@@ -4,15 +4,13 @@ import TopMenu from '../components/TopMenu';
 import { DataGrid } from '@mui/x-data-grid';
 import '../styles/pledges.css';
 
-const API_BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000'; // Define the API base URL
-
 const PledgesPage = () => {
     const [pledgesData, setPledgesData] = useState([]);
 
     useEffect(() => {
         const fetchPledgesData = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/pledges`); // Use the updated API_BASE_URL
+                const response = await fetch('/api/pledges');
                 const data = await response.json();
                 setPledgesData(data);
             } catch (error) {
