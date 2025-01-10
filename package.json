@@ -39,7 +39,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "CI=false npm install --production=false && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -67,15 +67,9 @@
     "@babel/plugin-proposal-class-properties": "^7.18.6",
     "@babel/plugin-proposal-private-methods": "^7.18.6",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@babel/plugin-transform-class-properties": "^7.25.9",
-    "@babel/plugin-transform-nullish-coalescing-operator": "^7.25.9",
-    "@babel/plugin-transform-numeric-separator": "^7.25.9",
-    "@babel/plugin-transform-optional-chaining": "^7.25.9",
-    "@babel/plugin-transform-private-methods": "^7.25.9",
     "@babel/preset-env": "^7.26.0",
-    "@rollup/plugin-terser": "^0.4.4",
     "babel-preset-react-app": "^10.0.1",
-    "fast-glob": "^3.3.3",
-    "svgo": "^3.3.2"
+    "babel-plugin-transform-runtime": "^7.20.0",
+    "babel-preset-react": "^7.0.0"
   }
 }
