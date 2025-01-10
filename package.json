@@ -39,7 +39,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "CI=false npm install --production=false && react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -61,7 +61,6 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5000",
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@babel/plugin-proposal-class-properties": "^7.18.6",
