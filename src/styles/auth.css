@@ -1,0 +1,116 @@
+/* General styling for the form container */
+.auth-form {
+    max-width: 400px;
+    width: 100%;
+    padding: 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+}
+
+/* Login form specific styling */
+.login-form {
+    background-color: #ffffff; /* Light blue background */
+    padding-top: 40px;
+    margin-top: 100px;
+    align-self: center;
+    
+}
+
+.login-form h2 {
+    text-align: center;
+    padding-bottom: 20px;
+    
+}
+/* Register form specific styling */
+.register-form {
+    background-color: #ffffff; /* Light green background for the register form */
+    padding-top: 40px;
+    margin-top: 80px;
+    align-self: center;
+}
+.register-form h2 {
+    text-align: center;
+    padding-bottom: 20px;
+    
+}
+/* Input and button styles */
+.auth-form input,
+.auth-form button {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+.auth-form input {
+    border: 1px solid #cccccc;
+    outline: none;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.auth-form input:focus {
+    border-color: #1565c0;
+    box-shadow: 0 0 4px rgba(21, 101, 192, 0.4);
+}
+
+.auth-form button {
+    background-color: #1565c0;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.auth-form button:hover {
+    background-color: #0d47a1;
+}
+
+.auth-form button:disabled {
+    background-color: #b0bec5;
+    cursor: not-allowed;
+}
+
+/* Error message styling */
+.error-message {
+    color: #f44336;
+    font-size: 14px;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+/* Styling for the link */
+.auth-link {
+    display: block;
+    text-align: center;
+    margin-top: 10px;
+    color: #1976d2;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.auth-link:hover {
+    color: #0d47a1;
+    text-decoration: underline;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .auth-form {
+        max-width: 100%;
+        padding: 15px;
+    }
+
+    .auth-form h2 {
+        font-size: 20px;
+    }
+
+    .auth-form input,
+    .auth-form button {
+        padding: 10px;
+        font-size: 14px;
+    }
+}
