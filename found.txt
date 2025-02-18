@@ -1,0 +1,756 @@
+const express = require("express");
+const router = express.Router();
+const nodemailer = require("nodemailer");
+const multer = require("multer");
+const upload = multer({ dest: "uploads/" });
+const AWS = require("aws-sdk");
+const multerS3 = require("multer-s3");
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
+const db = require("../config/db");
+const authMiddleware = require("../middleware/authMiddleware");
+
+// ✅ Add a Foundation Class (Admin only)
+router.post("/classes", authMiddleware, async (req, res) => {
+    const { title, description, video_url, document_url } = req.body;
+
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        await db.execute(
+            "INSERT INTO foundation_classes (title, description, video_url, document_url) VALUES (?, ?, ?, ?)",
+            [title, description, video_url, document_url]
+        );
+        res.json({ message: "Class added successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error adding class." });
+    }
+});
+
+// ✅ Get all Foundation Classes (For Users)
+router.get("/classes", async (req, res) => {
+    try {
+        const [classes] = await db.execute("SELECT * FROM foundation_classes");
+        res.json(classes);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching classes." });
+    }
+});
+
+// ✅ Add an Assignment (Admin only)
+router.post("/assignments", authMiddleware, async (req, res) => {
+    const { class_id, title, description, due_date } = req.body;
+
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        await db.execute(
+            "INSERT INTO assignments (class_id, title, description, due_date) VALUES (?, ?, ?, ?)",
+            [class_id, title, description, due_date]
+        );
+        res.json({ message: "Assignment added successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error adding assignment." });
+    }
+});
+
+// ✅ Submit an Assignment (User only)
+router.post("/submit", authMiddleware, async (req, res) => {
+    const { assignment_id, file_url } = req.body;
+
+    if (req.user.role !== "user") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        await db.execute(
+            "INSERT INTO submissions (user_id, assignment_id, file_url) VALUES (?, ?, ?)",
+            [req.user.id, assignment_id, file_url]
+        );
+        res.json({ message: "Assignment submitted successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error submitting assignment." });
+    }
+});
+
+// ✅ Admin View Submissions & Give Feedback
+router.put("/submissions/:id/feedback", authMiddleware, async (req, res) => {
+    const { feedback } = req.body;
+    const submission_id = req.params.id;
+
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        await db.execute("UPDATE submissions SET feedback = ? WHERE id = ?", [feedback, submission_id]);
+        res.json({ message: "Feedback added successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error adding feedback." });
+    }
+});
+
+// ✅ Admin: Get All Submissions
+router.get("/submissions", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        const [submissions] = await db.execute(
+            `SELECT s.id, s.file_url, s.feedback, u.first_name AS user_name, a.title AS assignment_title
+             FROM submissions s
+             JOIN users u ON s.user_id = u.id
+             JOIN assignments a ON s.assignment_id = a.id`
+        );
+        res.json(submissions);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching submissions." });
+    }
+});
+
+// ✅ Admin: Create Live Class with Video Link
+router.post("/live-class", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    const { title, description, video_link } = req.body;
+    try {
+        await db.execute(
+            "INSERT INTO foundation_classes (title, description, video_url) VALUES (?, ?, ?)",
+            [title, description, video_link]
+        );
+        res.json({ message: "Live class created successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error creating live class." });
+    }
+});
+
+// ✅ Get All Live Classes (For Users)
+router.get("/live-classes", async (req, res) => {
+    try {
+        const [classes] = await db.execute(
+            "SELECT id, title, description, video_url FROM foundation_classes WHERE video_url IS NOT NULL"
+        );
+        res.json(classes);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching live classes." });
+    }
+});
+
+
+
+// ✅ Admin: Notify Users About Live Class
+router.post("/notify-users", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    const { class_id } = req.body;
+
+    try {
+        // Get class details
+        const [[liveClass]] = await db.execute(
+            "SELECT title, description, video_url FROM foundation_classes WHERE id = ?",
+            [class_id]
+        );
+
+        if (!liveClass) {
+            return res.status(404).json({ message: "Live class not found." });
+        }
+
+        // Get all users
+        const [users] = await db.execute("SELECT email FROM users WHERE role = 'user'");
+
+        if (users.length === 0) {
+            return res.json({ message: "No users to notify." });
+        }
+
+        // Configure email transporter
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+        // Send emails
+        users.forEach(async (user) => {
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: user.email,
+                subject: `Upcoming Live Class: ${liveClass.title}`,
+                text: `Hello,\n\nA new live class is scheduled:\n\nTitle: ${liveClass.title}\nDescription: ${liveClass.description}\nJoin here: ${liveClass.video_url}\n\nBest Regards,\nChurch Team`,
+            };
+
+            await transporter.sendMail(mailOptions);
+        });
+
+        res.json({ message: "Users have been notified successfully!" });
+    } catch (error) {
+        res.status(500).json({ message: "Error sending notifications." });
+    }
+});
+
+// ✅ Edit Live Class
+router.put("/live-class/:id", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    const { title, description, video_link } = req.body;
+    const { id } = req.params;
+
+    try {
+        await db.execute(
+            "UPDATE foundation_classes SET title = ?, description = ?, video_url = ? WHERE id = ?",
+            [title, description, video_link, id]
+        );
+        res.json({ message: "Live class updated successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error updating live class." });
+    }
+});
+
+// ✅ Delete Live Class
+router.delete("/live-class/:id", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    const { id } = req.params;
+
+    try {
+        await db.execute("DELETE FROM foundation_classes WHERE id = ?", [id]);
+        res.json({ message: "Live class deleted successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error deleting live class." });
+    }
+});
+
+
+
+// ✅ Configure S3
+const s3 = new AWS.S3({
+    accessKeyId: process.env.AWS_ACCESS_KEY,
+    secretAccessKey: process.env.AWS_SECRET_KEY,
+    region: process.env.AWS_REGION,
+});
+
+// ✅ Configure Multer-S3
+//const upload = multer({
+    storage: multerS3({
+        s3,
+        bucket: process.env.AWS_BUCKET_NAME,
+        acl: "public-read",
+        metadata: (req, file, cb) => cb(null, { fieldName: file.fieldname }),
+        key: (req, file, cb) => cb(null, `assignments/${Date.now()}-${file.originalname}`),
+    }),
+//});
+
+// ✅ Upload Assignment
+router.post("/submit", authMiddleware, upload.single("file"), async (req, res) => {
+    const { assignment_id } = req.body;
+    const file_url = req.file.location;
+
+    try {
+        await db.execute("INSERT INTO submissions (assignment_id, user_id, file_url) VALUES (?, ?, ?)", [
+            assignment_id,
+            req.user.id,
+            file_url,
+        ]);
+        res.json({ message: "Assignment submitted successfully!", file_url });
+    } catch (error) {
+        res.status(500).json({ message: "Error submitting assignment." });
+    }
+});
+
+// ✅ Get All Submissions for Admin
+router.get("/submissions", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        const [submissions] = await db.execute(`
+            SELECT s.id, u.first_name, u.last_name, s.file_url, s.grade, s.feedback, s.submitted_at 
+            FROM submissions s
+            JOIN users u ON s.user_id = u.id
+        `);
+        res.json(submissions);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching submissions." });
+    }
+});
+
+// ✅ Grade Assignment
+router.put("/grade/:id", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    const { id } = req.params;
+    const { grade, feedback } = req.body;
+
+    try {
+        await db.execute("UPDATE submissions SET grade = ?, feedback = ? WHERE id = ?", [grade, feedback, id]);
+        res.json({ message: "Assignment graded successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error grading assignment." });
+    }
+});
+
+// ✅ Get All Submissions for Admin
+router.get("/submissions", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        const [submissions] = await db.execute(`
+            SELECT s.id, u.first_name, u.last_name, s.file_url, s.grade, s.feedback, s.submitted_at 
+            FROM submissions s
+            JOIN users u ON s.user_id = u.id
+        `);
+        res.json(submissions);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching submissions." });
+    }
+});
+
+// ✅ Grade Assignment
+router.put("/grade/:id", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    const { id } = req.params;
+    const { grade, feedback } = req.body;
+
+    try {
+        await db.execute("UPDATE submissions SET grade = ?, feedback = ? WHERE id = ?", [grade, feedback, id]);
+        res.json({ message: "Assignment graded successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error grading assignment." });
+    }
+});
+
+// ✅ Mark Attendance
+router.post("/mark-attendance", authMiddleware, async (req, res) => {
+    const { class_id } = req.body;
+
+    try {
+        await db.execute("INSERT INTO attendance (class_id, user_id, attended_at) VALUES (?, ?, NOW())", [
+            class_id,
+            req.user.id,
+        ]);
+        res.json({ message: "Attendance recorded successfully." });
+    } catch (error) {
+        res.status(500).json({ message: "Error marking attendance." });
+    }
+});
+
+// ✅ Get Attendance for a Class (Admin)
+router.get("/attendance/:class_id", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).json({ message: "Access denied." });
+    }
+
+    try {
+        const [attendance] = await db.execute(`
+            SELECT u.first_name, u.last_name, a.attended_at 
+            FROM attendance a
+            JOIN users u ON a.user_id = u.id
+            WHERE a.class_id = ?
+        `, [req.params.class_id]);
+
+        res.json(attendance);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching attendance." });
+    }
+});
+
+
+// ✅ Get User Progress
+router.get("/progress", authMiddleware, async (req, res) => {
+    try {
+        const [[progress]] = await db.execute(`
+            SELECT 
+                (SELECT COUNT(*) FROM foundation_classes) AS total_classes,
+                (SELECT COUNT(*) FROM attendance WHERE user_id = ?) AS attended_classes,
+                (SELECT COUNT(*) FROM assignments) AS total_assignments,
+                (SELECT COUNT(*) FROM submissions WHERE user_id = ?) AS completed_assignments
+        `, [req.user.id, req.user.id]);
+
+        res.json(progress);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching progress." });
+    }
+});
+
+// ✅ Generate Completion Certificate
+router.get("/certificate", authMiddleware, async (req, res) => {
+    try {
+        // Check if the user completed all requirements
+        const [[progress]] = await db.execute(`
+            SELECT 
+                (SELECT COUNT(*) FROM foundation_classes) AS total_classes,
+                (SELECT COUNT(*) FROM attendance WHERE user_id = ?) AS attended_classes,
+                (SELECT COUNT(*) FROM assignments) AS total_assignments,
+                (SELECT COUNT(*) FROM submissions WHERE user_id = ?) AS completed_assignments
+        `, [req.user.id, req.user.id]);
+
+        if (progress.attended_classes < progress.total_classes || progress.completed_assignments < progress.total_assignments) {
+            return res.status(400).json({ message: "You have not completed all requirements." });
+        }
+
+        // Generate Certificate PDF
+        const doc = new PDFDocument({ size: "A4", layout: "landscape" });
+        const certificatePath = path.join(__dirname, `../certificates/${req.user.id}_certificate.pdf`);
+        const stream = fs.createWriteStream(certificatePath);
+        doc.pipe(stream);
+
+        // Certificate Design
+        doc.fontSize(30).text("Certificate of Completion", { align: "center" });
+        doc.moveDown();
+        doc.fontSize(20).text(`This is to certify that`, { align: "center" });
+        doc.moveDown();
+        doc.fontSize(25).text(`${req.user.first_name} ${req.user.last_name}`, { align: "center", underline: true });
+        doc.moveDown();
+        doc.fontSize(18).text(`has successfully completed the Foundation School program.`, { align: "center" });
+        doc.moveDown();
+        doc.fontSize(15).text(`Date: ${new Date().toDateString()}`, { align: "center" });
+
+        // Finalize PDF
+        doc.end();
+
+        stream.on("finish", () => {
+            res.download(certificatePath, "Foundation_Certificate.pdf");
+        });
+    } catch (error) {
+        console.error("Error generating certificate:", error);
+        res.status(500).json({ message: "Error generating certificate." });
+    }
+});
+
+
+
+
+router.get("/certificate", authMiddleware, async (req, res) => {
+    try {
+        // Check if user completed all requirements
+        const [[progress]] = await db.execute(`
+            SELECT 
+                (SELECT COUNT(*) FROM foundation_classes) AS total_classes,
+                (SELECT COUNT(*) FROM attendance WHERE user_id = ?) AS attended_classes,
+                (SELECT COUNT(*) FROM assignments) AS total_assignments,
+                (SELECT COUNT(*) FROM submissions WHERE user_id = ?) AS completed_assignments
+        `, [req.user.id, req.user.id]);
+
+        if (progress.attended_classes < progress.total_classes || progress.completed_assignments < progress.total_assignments) {
+            return res.status(400).json({ message: "You have not completed all requirements." });
+        }
+
+        // Generate Certificate PDF
+        const doc = new PDFDocument({ size: "A4", layout: "landscape" });
+        const certificatePath = path.join(__dirname, `../certificates/${req.user.id}_certificate.pdf`);
+        const stream = fs.createWriteStream(certificatePath);
+        doc.pipe(stream);
+
+        // Add Background or Border
+        doc.rect(20, 20, 800, 550).stroke();
+
+        // Church Logo
+        const logoPath = path.join(__dirname, "../assets/church_logo.png");
+        if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 320, 40, { width: 150 });
+        }
+
+        // Certificate Title
+        doc.fontSize(35).font("Helvetica-Bold").text("Certificate of Completion", 0, 120, { align: "center" });
+        doc.moveDown();
+
+        // Subtext
+        doc.fontSize(20).text("This certifies that", { align: "center" });
+        doc.moveDown();
+
+        // User's Name
+        doc.fontSize(28).font("Helvetica-Bold").text(req.user.first_name + " " + req.user.last_name, { align: "center", underline: true });
+        doc.moveDown();
+
+        // Course Completion
+        doc.fontSize(18).text("has successfully completed the Foundation School program", { align: "center" });
+        doc.moveDown();
+
+        // Date
+        doc.fontSize(15).text(`Date: ${new Date().toDateString()}`, { align: "center" });
+
+        // Pastor's Signature
+        const signaturePath = path.join(__dirname, "../assets/pastor_signature.png");
+        if (fs.existsSync(signaturePath)) {
+            doc.image(signaturePath, 300, 400, { width: 200 });
+        }
+        doc.fontSize(16).text("Pastor's Signature", 320, 450, { align: "center" });
+
+        // Finalize PDF
+        doc.end();
+
+        stream.on("finish", () => {
+            res.download(certificatePath, "Foundation_Certificate.pdf");
+        });
+    } catch (error) {
+        console.error("Error generating certificate:", error);
+        res.status(500).json({ message: "Error generating certificate." });
+    }
+});
+
+// 🔹 Admin: Create Online Class
+router.post("/classes", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Access Denied" });
+
+    const { title, date, platform, link } = req.body;
+    try {
+        await db.execute("INSERT INTO foundation_classes (title, date, platform, link) VALUES (?, ?, ?, ?)", 
+            [title, date, platform, link]
+        );
+        res.json({ message: "Class scheduled successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error scheduling class" });
+    }
+});
+
+// 🔹 User: Get Available Classes
+router.get("/classes", authMiddleware, async (req, res) => {
+    try {
+        const [classes] = await db.execute("SELECT * FROM foundation_classes ORDER BY date DESC");
+        res.json(classes);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching classes" });
+    }
+});
+
+// 🔹 Admin: Upload Documents/Videos
+
+
+router.post("/materials", authMiddleware, upload.single("file"), async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Access Denied" });
+
+    const { title, type } = req.body;
+    const filePath = `/uploads/${req.file.filename}`;
+    try {
+        await db.execute("INSERT INTO foundation_materials (title, type, file_path) VALUES (?, ?, ?)", 
+            [title, type, filePath]
+        );
+        res.json({ message: "Material uploaded successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error uploading material" });
+    }
+});
+
+// 🔹 User: Get Materials
+router.get("/materials", authMiddleware, async (req, res) => {
+    try {
+        const [materials] = await db.execute("SELECT * FROM foundation_materials ORDER BY created_at DESC");
+        res.json(materials);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching materials" });
+    }
+});
+ // 🔹 Admin: Create Assignment
+router.post("/assignments", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Access Denied" });
+
+    const { title, description, due_date } = req.body;
+    try {
+        await db.execute("INSERT INTO foundation_assignments (title, description, due_date) VALUES (?, ?, ?)", 
+            [title, description, due_date]
+        );
+        res.json({ message: "Assignment created successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error creating assignment" });
+    }
+});
+
+// 🔹 User: Get Assignments
+router.get("/assignments", authMiddleware, async (req, res) => {
+    try {
+        const [assignments] = await db.execute("SELECT * FROM foundation_assignments ORDER BY due_date ASC");
+        res.json(assignments);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching assignments" });
+    }
+});
+
+// 🔹 User: Submit Assignment
+const upload = multer({ dest: "uploads/assignments/" });
+
+router.post("/submit-assignment", authMiddleware, upload.single("file"), async (req, res) => {
+    const { assignment_id } = req.body;
+    const filePath = `/uploads/assignments/${req.file.filename}`;
+    
+    try {
+        await db.execute("INSERT INTO foundation_submissions (user_id, assignment_id, file_path, status) VALUES (?, ?, ?, 'pending')", 
+            [req.user.id, assignment_id, filePath]
+        );
+        res.json({ message: "Assignment submitted successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error submitting assignment" });
+    }
+});
+
+// 🔹 Admin: Grade Assignment
+router.put("/grade-assignment", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Access Denied" });
+
+    const { submission_id, feedback, grade } = req.body;
+    try {
+        await db.execute("UPDATE foundation_submissions SET feedback = ?, grade = ?, status = 'graded' WHERE id = ?", 
+            [feedback, grade, submission_id]
+        );
+        res.json({ message: "Assignment graded successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error grading assignment" });
+    }
+});
+
+// 🔹 User: Get Assignment Progress
+router.get("/assignments/progress", authMiddleware, async (req, res) => {
+    try {
+        const [progress] = await db.execute(
+            `SELECT a.id, a.title, a.due_date, 
+            (SELECT status FROM foundation_submissions WHERE user_id = ? AND assignment_id = a.id) AS status 
+            FROM foundation_assignments a 
+            ORDER BY a.due_date ASC`,
+            [req.user.id]
+        );
+        res.json(progress);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching assignment progress" });
+    }
+});
+
+// 🔹 Admin: Get All Submissions for Review
+router.get("/admin/submissions", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Access Denied" });
+
+    try {
+        const [submissions] = await db.execute(
+            `SELECT s.id, u.first_name, u.last_name, a.title, s.file_path, s.status, s.feedback, s.grade
+            FROM foundation_submissions s
+            JOIN users u ON s.user_id = u.id
+            JOIN foundation_assignments a ON s.assignment_id = a.id`
+        );
+        res.json(submissions);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching submissions" });
+    }
+});
+
+// 🔹 Send Notification on Grading
+const sendNotification = async (user_id, message) => {
+    await db.execute("INSERT INTO notifications (user_id, message, seen) VALUES (?, ?, 0)", [user_id, message]);
+};
+
+router.put("/grade-assignment", authMiddleware, async (req, res) => {
+    if (req.user.role !== "admin") return res.status(403).json({ message: "Access Denied" });
+
+    const { submission_id, feedback, grade, user_id } = req.body;
+    try {
+        await db.execute("UPDATE foundation_submissions SET feedback = ?, grade = ?, status = 'graded' WHERE id = ?", 
+            [feedback, grade, submission_id]
+        );
+
+        await sendNotification(user_id, "Your assignment has been graded. Check your feedback!");
+
+        res.json({ message: "Assignment graded successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error grading assignment" });
+    }
+});
+
+// 🔹 User: Fetch Notifications
+router.get("/notifications", authMiddleware, async (req, res) => {
+    try {
+        const [notifications] = await db.execute("SELECT * FROM notifications WHERE user_id = ? AND seen = 0", [req.user.id]);
+        res.json(notifications);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching notifications" });
+    }
+});
+
+// 🔹 Mark Notifications as Seen
+router.put("/notifications/mark-seen", authMiddleware, async (req, res) => {
+    try {
+        await db.execute("UPDATE notifications SET seen = 1 WHERE user_id = ?", [req.user.id]);
+        res.json({ message: "Notifications marked as seen!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error marking notifications" });
+    }
+});
+
+
+// 🔹 Send Notification on Grading
+router.put("/grade-assignment", async (req, res) => {
+    const { submission_id, feedback, grade, user_id } = req.body;
+    
+    try {
+        await db.execute("UPDATE foundation_submissions SET feedback = ?, grade = ?, status = 'graded' WHERE id = ?", 
+            [feedback, grade, submission_id]
+        );
+
+        // Send real-time notification
+        req.io.emit("notification", `Your assignment has been graded: ${grade}`);
+
+        res.json({ message: "Assignment graded successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error grading assignment" });
+    }
+});
+
+// 🔹 Notify Admin when a user submits an assignment
+router.post("/submit-assignment", async (req, res) => {
+    const { user_id, assignment_id, file_path } = req.body;
+
+    try {
+        await db.execute(
+            "INSERT INTO foundation_submissions (user_id, assignment_id, file_path, status) VALUES (?, ?, ?, 'submitted')",
+            [user_id, assignment_id, file_path]
+        );
+
+        // Notify all admins
+        req.io.emit("notification", `A new assignment has been submitted.`);
+
+        res.json({ message: "Assignment submitted successfully!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error submitting assignment" });
+    }
+});
+
+
+
+
+
+
+module.exports = router;
