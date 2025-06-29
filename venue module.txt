@@ -1,0 +1,3425 @@
+
+-- Venues table
+CREATE TABLE IF NOT EXISTS venues (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  address VARCHAR(255),
+  city VARCHAR(100),
+  country VARCHAR(100),
+  capacity INT,
+  amenities JSONB,
+  map_image_url TEXT,
+  digital_access_enabled BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Venue Sections (for grouping seats, e.g., VIP, Main)
+CREATE TABLE IF NOT EXISTS venue_sections (
+  id SERIAL PRIMARY KEY,
+  venue_id INT REFERENCES venues(id),
+  name VARCHAR(100),
+  description TEXT,
+  sort_order INT
+);
+
+-- Seats table (for each seat in the venue)
+CREATE TABLE IF NOT EXISTS seats (
+  id SERIAL PRIMARY KEY,
+  venue_id INT REFERENCES venues(id),
+  section_id INT REFERENCES venue_sections(id),
+  label VARCHAR(20),
+  row VARCHAR(10),
+  number INT,
+  type VARCHAR(50),
+  x NUMERIC(6,2),
+  y NUMERIC(6,2),
+  status VARCHAR(20) DEFAULT 'available',
+  digital_access_code VARCHAR(100),
+  properties JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+import * as Seat from '../models/seatModel.js';
+
+export const getByVenue = async (req, res) => {
+  try {
+    const venueId = Number(req.params.venue_id);
+    if (!venueId || isNaN(venueId)) {
+      return res.status(400).json({ error: "Invalid venue_id" });
+    }
+    const { rows } = await Seat.getSeatsByVenue(venueId);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getBySection = async (req, res) => {
+  try {
+    const sectionId = Number(req.params.section_id);
+    if (!sectionId || isNaN(sectionId)) {
+      return res.status(400).json({ error: "Invalid section_id" });
+    }
+    const { rows } = await Seat.getSeatsBySection(sectionId);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const create = async (req, res) => {
+  try {
+    const { venue_id } = req.params; // from POST /api/venues/:venue_id/seats
+    const {
+      section_id, label, row, number,
+      type, price, status, x, y, properties
+    } = req.body;
+
+    const { rows } = await Seat.createSeat({
+      venue_id, section_id, label, row, number, type, price, status, x, y, properties
+    });
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const update = async (req, res) => {
+  try {
+    const { rows } = await Seat.updateSeat(req.params.id, req.body);
+    if (!rows.length) return res.status(404).json({ message: 'Seat not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteSeat = async (req, res) => {
+  try {
+    await Seat.deleteSeat(req.params.id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getSeats = async (req, res) => {
+  try {
+    const sectionId = Number(req.query.section_id);
+    if (!sectionId || isNaN(sectionId)) {
+      return res.status(400).json({ error: "Invalid section_id" });
+    }
+    const { rows } = await Seat.getSeatsBySection(sectionId);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+import * as sectionModel from '../models/sectionModel.js';
+
+// Get all sections for a venue (supports both /venues/:venue_id/sections and /sections?venue_id=...)
+export const getByVenue = async (req, res) => {
+  try {
+    const venue_id = Number(req.params.venue_id || req.query.venue_id);
+    if (!venue_id || isNaN(venue_id)) {
+      return res.status(400).json({ error: "Invalid venue_id" });
+    }
+    const result = await sectionModel.getSectionsByVenue(venue_id);
+    // Always return id, name, description, sort_order for each section
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Create a new section
+export const create = async (req, res) => {
+  try {
+    const { rows } = await sectionModel.createSection(req.body);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error("Error creating section:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Update a section
+export const update = async (req, res) => {
+  try {
+    const { rows } = await sectionModel.updateSection(req.params.id, req.body);
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Section not found' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("Error updating section:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Delete a section
+export const deleteSection = async (req, res) => {
+  try {
+    await sectionModel.deleteSection(req.params.id);
+    res.status(204).end();
+  } catch (err) {
+    console.error("Error deleting section:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+import db from '../config/db.js';
+
+export const getSeatsByVenue = async (venue_id) => {
+  return db.query('SELECT * FROM seats WHERE venue_id = $1 ORDER BY section_id, row::int, number', [venue_id]);
+};
+
+export const getSeatsBySection = async (section_id) => {
+  return db.query('SELECT * FROM seats WHERE section_id = $1 ORDER BY row::int, number', [section_id]);
+};
+
+export const createSeat = async (data) => {
+  const { section_id, venue_id, label, row, number, type, price, status, x, y, properties } = data;
+  return db.query(
+    'INSERT INTO seats (section_id, venue_id, label, row, number, type, price, status, x, y, properties) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+    [section_id, venue_id, label, row, number, type, price, status, x, y, properties || {}]
+  );
+};
+
+export const updateSeat = async (id, data) => {
+  const fields = ['label','row','number','type','price','status','x','y','properties','section_id'];
+  const updates = fields.filter(f => f in data).map((f,i) => `${f}=$${i+1}`);
+  const values = fields.filter(f => f in data).map(f => data[f]);
+  values.push(id);
+  return db.query(
+    `UPDATE seats SET ${updates.join(',')}, updated_at=NOW() WHERE id=$${values.length} RETURNING *`,
+    values
+  );
+};
+
+export const deleteSeat = async (id) => {
+  return db.query('DELETE FROM seats WHERE id = $1', [id]);
+};
+
+import db from '../config/db.js';
+
+export const getSectionsByVenue = async (venue_id) => {
+  return db.query(
+    'SELECT id, name, description, sort_order FROM venue_sections WHERE venue_id = $1 ORDER BY sort_order, id',
+    [venue_id]
+  );
+};
+
+export const createSection = async (data) => {
+  const { venue_id, name, description, sort_order } = data;
+  return db.query(
+    'INSERT INTO venue_sections (venue_id, name, description, sort_order) VALUES ($1,$2,$3,$4) RETURNING id, name, description, sort_order',
+    [venue_id, name, description, sort_order || 0]
+  );
+};
+
+export const updateSection = async (id, data) => {
+  const { name, description, sort_order } = data;
+  return db.query(
+    'UPDATE venue_sections SET name=$1, description=$2, sort_order=$3, updated_at=NOW() WHERE id=$4 RETURNING id, name, description, sort_order',
+    [name, description, sort_order || 0, id]
+  );
+};
+
+export const deleteSection = async (id) => {
+  return db.query('DELETE FROM venue_sections WHERE id=$1', [id]);
+};
+
+import db from '../config/db.js';
+
+export const getAllVenues = async () => {
+  return db.query('SELECT * FROM venues ORDER BY name');
+};
+
+export const getVenueById = async (id) => {
+  return db.query('SELECT * FROM venues WHERE id = $1', [id]);
+};
+
+export const createVenue = async (data) => {
+  const { name, address, city, country, capacity, amenities, map_image_url, digital_access_enabled } = data;
+  return db.query(
+    'INSERT INTO venues (name, address, city, country, capacity, amenities, map_image_url, digital_access_enabled) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+    [name, address, city, country, capacity, amenities, map_image_url, digital_access_enabled]
+  );
+};
+
+export const updateVenue = async (id, data) => {
+  const { name, address, city, country, capacity, amenities, map_image_url, digital_access_enabled } = data;
+  return db.query(
+    'UPDATE venues SET name=$1, address=$2, city=$3, country=$4, capacity=$5, amenities=$6, map_image_url=$7, digital_access_enabled=$8, updated_at=NOW() WHERE id=$9 RETURNING *',
+    [name, address, city, country, capacity, amenities, map_image_url, digital_access_enabled, id]
+  );
+};
+
+export const deleteVenue = async (id) => {
+  return db.query('DELETE FROM venues WHERE id = $1', [id]);
+};
+
+import * as Venue from '../models/venueModel.js';
+
+export const getAll = async (req, res) => {
+  const { rows } = await Venue.getAllVenues();
+  res.json(rows);
+};
+
+export const getById = async (req, res) => {
+  const { rows } = await Venue.getVenueById(req.params.id);
+  if (!rows.length) return res.status(404).json({ message: 'Venue not found' });
+  res.json(rows[0]);
+};
+
+export const create = async (req, res) => {
+  const { rows } = await Venue.createVenue(req.body);
+  res.status(201).json(rows[0]);
+};
+
+export const update = async (req, res) => {
+  const { rows } = await Venue.updateVenue(req.params.id, req.body);
+  if (!rows.length) return res.status(404).json({ message: 'Venue not found' });
+  res.json(rows[0]);
+};
+
+export const deleteVenue = async (req, res) => {
+  await Venue.delete(req.params.id);
+  res.status(204).end();
+};
+
+import express from "express";
+import { authenticateToken } from "../middleware/auth.js";
+import { requirePermission } from "../middleware/rbac.js";
+import * as venueController from "../controllers/venueController.js";
+import * as sectionController from "../controllers/sectionController.js";
+import * as seatController from "../controllers/seatController.js";
+import { importSeatMap, exportSeatMap } from "../controllers/importExportController.js";
+import * as layoutController from "../controllers/layoutController.js";
+
+const router = express.Router();
+
+router.use(authenticateToken);
+
+// Import/Export seatmap
+router.post("/:venue_id/import-seatmap", requirePermission("venue:import"), importSeatMap);
+router.get("/:venue_id/export-seatmap", requirePermission("venue:export"), exportSeatMap);
+
+// Save/load seat layout (bulk)
+router.put("/:venue_id/layout", requirePermission("venue:update"), layoutController.saveLayout);
+router.get("/:venue_id/layout", layoutController.loadLayout);
+
+// Venues
+router.get("/", venueController.getAll);
+router.get("/:id", venueController.getById);
+router.post("/", requirePermission("venue:create"), venueController.create);
+router.put("/:id", requirePermission("venue:update"), venueController.update);
+router.delete("/:id", requirePermission("venue:delete"), venueController.deleteVenue);
+
+// Sections (per venue)
+router.get('/:venue_id/sections', sectionController.getByVenue);
+router.post('/sections', requirePermission("section:create"), sectionController.create);
+router.put('/sections/:id', requirePermission("section:update"), sectionController.update);
+router.delete('/sections/:id', requirePermission("section:delete"), sectionController.deleteSection);
+
+// Seats (per venue, per section)
+router.get('/:venue_id/seats', seatController.getByVenue);
+router.get('/sections/:section_id/seats', seatController.getBySection);
+router.post('/:venue_id/seats', requirePermission("seat:create"), seatController.create);
+router.put('/seats/:id', requirePermission("seat:update"), seatController.update);
+router.delete('/seats/:id', requirePermission("seat:delete"), seatController.deleteSeat);
+router.get('/seats', seatController.getSeats);  // expects ?section_id=...
+
+// ✅ FLAT route for direct seat creation (used by SeatMapDesigner)
+router.post('/seats', requirePermission("seat:create"), seatController.create);
+
+export default router;   const API = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+// Helper to get token from sessionStorage
+function getToken() {
+  return sessionStorage.getItem("accessToken");
+}
+
+// Global logout on 401/403
+function handleAuthError(res) {
+  if (res.status === 401 || res.status === 403) {
+    sessionStorage.removeItem("accessToken");
+    sessionStorage.removeItem("refreshToken");
+    window.location.href = "/login";
+    return true;
+  }
+  return false;
+}
+
+// Venues
+export const fetchVenues = async () => {
+  const token = getToken();
+  const res = await fetch(`${API}/venues`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to fetch venues");
+  return res.json();
+};
+
+export const fetchVenue = async (id) => {
+  const token = getToken();
+  const res = await fetch(`${API}/venues/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to fetch venue");
+  return res.json();
+};
+
+export const createVenue = async (venue) => {
+  const token = getToken();
+  const res = await fetch(`${API}/venues`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(venue),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to create venue");
+  return res.json();
+};
+
+export const updateVenue = async (id, venue) => {
+  const token = getToken();
+  const res = await fetch(`${API}/venues/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(venue),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to update venue");
+  return res.json();
+};
+
+export const deleteVenue = async (id) => {
+  const token = getToken();
+  const res = await fetch(`${API}/venues/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to delete venue");
+  return true;
+};
+
+// Sections
+export const fetchSections = async (venueId) => {
+  const token = getToken();
+  const res = await fetch(`${API}/${encodeURIComponent(venueId)}/sections`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to fetch sections");
+  return res.json();
+};
+
+export const createSection = async (section) => {
+  const token = getToken();
+  const res = await fetch(`${API}/sections`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(section),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to create section");
+  return res.json();
+};
+
+export const updateSection = async (id, section) => {
+  const token = getToken();
+  const res = await fetch(`${API}/sections/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(section),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to update section");
+  return res.json();
+};
+
+export const deleteSection = async (id) => {
+  const token = getToken();
+  const res = await fetch(`${API}/sections/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to delete section");
+  return true;
+};
+
+// Seats
+export const fetchSeatsByVenue = async (venueId) => {
+  const token = getToken();
+  const res = await fetch(
+    `${API}/venues/${encodeURIComponent(venueId)}/seats`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to fetch seats by venue");
+  return res.json();
+};
+
+export const createSeat = async (seat) => {
+  const token = getToken();
+  const res = await fetch(`${API}/venues/seats`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(seat),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to create seat");
+  return res.json();
+};
+
+export const updateSeat = async (id, seat) => {
+  const token = getToken();
+  const res = await fetch(
+    `${API}/seats/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(seat),
+    }
+  );
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to update seat");
+  return res.json();
+};
+
+export const deleteSeat = async (id) => {
+  const token = getToken();
+  const res = await fetch(
+    `${API}/seats/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to delete seat");
+  return true;
+};
+
+// Import/Export seatmap
+export const importSeatMap = async (venueId, seatMap) => {
+  const token = getToken();
+  const res = await fetch(`${API}/${encodeURIComponent(venueId)}/import-seatmap`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ seatMap }),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to import seat map");
+  return res.json();
+};
+
+export const exportSeatMap = async (venueId) => {
+  const token = getToken();
+  const res = await fetch(`${API}/${encodeURIComponent(venueId)}/export-seatmap`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to export seat map");
+  return res.json();
+};
+
+// Ticket Types
+export const fetchTicketTypes = async (eventId) => {
+  const token = getToken();
+  const res = await fetch(`${API}/ticket-types?eventId=${encodeURIComponent(eventId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to fetch ticket types");
+  return res.json();
+};
+
+export const createTicketType = async (type) => {
+  const token = getToken();
+  const res = await fetch(`${API}/ticket-types`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(type),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to create ticket type");
+  return res.json();
+};
+
+export const updateTicketType = async (id, type) => {
+  const token = getToken();
+  const res = await fetch(`${API}/ticket-types/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(type),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to update ticket type");
+  return res.json();
+};
+
+export const deleteTicketType = async (id) => {
+  const token = getToken();
+  const res = await fetch(`${API}/ticket-types/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to delete ticket type");
+  return true;
+};
+
+// Venue Layout
+export const fetchVenueLayout = async (venueId) => {
+  const token = getToken();
+  const res = await fetch(`${API}/${encodeURIComponent(venueId)}/layout`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to fetch layout");
+  return res.json();
+};
+
+export const saveVenueLayout = async (venueId, layout) => {
+  const token = getToken();
+  const res = await fetch(`${API}/${encodeURIComponent(venueId)}/layout`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ layout }),
+  });
+  if (handleAuthError(res)) return;
+  if (!res.ok) throw new Error("Failed to save layout");
+  return res.json();
+};
+
+// Seats by Section
+export const fetchSeatsBySection = async (sectionId) => {
+  const res = await fetch(`${API}/seats?section_id=${sectionId}`, {
+    headers: { Authorization: `Bearer ${getToken()}` }
+  });
+  if (!res.ok) throw new Error("Failed to fetch seats by section");
+  return res.json();
+};
+
+
+import React, { useState, useRef, useMemo, useCallback } from "react";
+
+// Helper: create stadium rows
+function createCurvedRows({ centerX, centerY, startRadius, rowSpacing, seatsPerRow, arcAngle, rowRotations, sections }) {
+  let seats = [];
+  let sectionIdx = 0;
+  for (let row = 0; row < seatsPerRow.length; row++) {
+    const radius = startRadius + row * rowSpacing;
+    const rotation = rowRotations[row] || 0;
+    const section = sections?.[row] || null;
+    for (let i = 0; i < seatsPerRow[row]; i++) {
+      const angle = seatsPerRow[row] === 1
+        ? rotation
+        : rotation + (-arcAngle / 2 + (arcAngle * i) / (seatsPerRow[row] - 1));
+      seats.push({
+        id: `${section ? section.name : "Section"}-R${row + 1}S${i + 1}`,
+        row: row + 1,
+        number: i + 1,
+        x: centerX + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+        angle,
+        label: `R${row + 1}S${i + 1}`,
+        price: 100,
+        section: section ? section.name : "Section",
+      });
+    }
+    sectionIdx = (sectionIdx + 1) % (sections?.length || 1);
+  }
+  return seats;
+}
+
+// Helper: create circular table
+function createCircularTable(centerX, centerY, tableRadius, seatRadius, seatCount, rotation, section) {
+  let seats = [];
+  for (let i = 0; i < seatCount; i++) {
+    const angle = rotation + (2 * Math.PI * i) / seatCount;
+    seats.push({
+      id: `${section.name}-T1S${i + 1}`,
+      row: 1,
+      number: i + 1,
+      x: centerX + seatRadius * Math.cos(angle),
+      y: centerY + seatRadius * Math.sin(angle),
+      angle,
+      label: `S${i + 1}`,
+      price: 100,
+      section: section.name,
+    });
+  }
+  return seats;
+}
+
+const DEFAULT_SECTIONS = [
+  { name: "VIP", color: "#FFD700" },
+  { name: "General", color: "#1976d2" },
+  { name: "Balcony", color: "#9c27b0" },
+];
+
+export default function AdvancedVenueDesigner({ venueId }) {
+  // Layout mode
+  const [mode, setMode] = useState("stadium"); // or "table"
+
+  // Section support
+  const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [currentSection, setCurrentSection] = useState(sections[0].name);
+
+  // Stadium state
+  const [arcAngle, setArcAngle] = useState(Math.PI * 1.1);
+  const [rowSpacing, setRowSpacing] = useState(35);
+  const [startRadius, setStartRadius] = useState(120);
+  const [seatsPerRow, setSeatsPerRow] = useState([10, 14, 18, 22, 26]);
+  const [rowRotations, setRowRotations] = useState([0, 0, 0, 0, 0]);
+  const [rowSections, setRowSections] = useState([sections[0], sections[1], sections[1], sections[2], sections[2]]);
+
+  // Table state
+  const [tableSeatCount, setTableSeatCount] = useState(8);
+  const [tableRotation, setTableRotation] = useState(0);
+  const [tableSection, setTableSection] = useState(sections[0]);
+
+  // Global seat edits
+  const [seatData, setSeatData] = useState({});
+  // Selection
+  const [selected, setSelected] = useState([]);
+  // Drag state
+  const [draggedSeats, setDraggedSeats] = useState([]);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // SVG ref for drag math
+  const svgRef = useRef();
+
+  // Compute seats for display
+  const seats = useMemo(() => {
+    let generated;
+    if (mode === "stadium") {
+      generated = createCurvedRows({
+        centerX: 350,
+        centerY: 400,
+        startRadius,
+        rowSpacing,
+        seatsPerRow,
+        arcAngle,
+        rowRotations,
+        sections: rowSections,
+      });
+    } else {
+      generated = createCircularTable(350, 250, 40, 90, tableSeatCount, tableRotation, tableSection);
+    }
+    // Apply seatData edits
+    return generated.map(seat => seatData[seat.id] ? { ...seat, ...seatData[seat.id] } : seat);
+  }, [
+    mode, startRadius, rowSpacing, seatsPerRow, arcAngle, rowRotations, rowSections,
+    tableSeatCount, tableRotation, tableSection, seatData
+  ]);
+
+  // --- Drag and group move logic ---
+  function onSeatMouseDown(seat, e) {
+    // Multi-select move support
+    const seatIds = selected.includes(seat.id) ? selected : [seat.id];
+    setDraggedSeats(seatIds);
+
+    const svgRect = svgRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - seat.x - svgRect.left,
+      y: e.clientY - seat.y - svgRect.top,
+    });
+
+    window.addEventListener("mousemove", onSeatMouseMove);
+    window.addEventListener("mouseup", onSeatMouseUp);
+  }
+  function onSeatMouseMove(e) {
+    if (!draggedSeats.length) return;
+    const svgRect = svgRef.current.getBoundingClientRect();
+    setSeatData(sd => {
+      const updates = { ...sd };
+      draggedSeats.forEach(seatId => {
+        const orig = seats.find(s => s.id === seatId);
+        if (!orig) return;
+        updates[seatId] = {
+          ...sd[seatId],
+          x: e.clientX - svgRect.left - dragOffset.x,
+          y: e.clientY - svgRect.top - dragOffset.y,
+        };
+      });
+      return updates;
+    });
+  }
+  function onSeatMouseUp() {
+    setDraggedSeats([]);
+    window.removeEventListener("mousemove", onSeatMouseMove);
+    window.removeEventListener("mouseup", onSeatMouseUp);
+  }
+
+  // --- Seat edit modal ---
+  function onEditSeat(seat) {
+    const label = prompt("Set seat label:", seat.label || "");
+    if (label !== null)
+      setSeatData(sd => ({
+        ...sd,
+        [seat.id]: { ...(sd[seat.id] || {}), label },
+      }));
+    const price = prompt("Set price for this seat:", seat.price || "");
+    if (price !== null)
+      setSeatData(sd => ({
+        ...sd,
+        [seat.id]: { ...(sd[seat.id] || {}), price },
+      }));
+    const section = prompt(
+      `Set section for this seat: (${sections.map(s => s.name).join(", ")})`,
+      seat.section || ""
+    );
+    if (section !== null && sections.find(s => s.name === section))
+      setSeatData(sd => ({
+        ...sd,
+        [seat.id]: { ...(sd[seat.id] || {}), section },
+      }));
+  }
+
+  // --- Row rotation ---
+  function rotateRow(idx, delta) {
+    setRowRotations(rr => rr.map((r, i) => (i === idx ? r + delta : r)));
+  }
+  // --- Group rotate for stadium ---
+  function rotateSelected(delta) {
+    setSeatData(sd => {
+      const updates = { ...sd };
+      selected.forEach(seatId => {
+        const seat = seats.find(s => s.id === seatId);
+        if (!seat) return;
+        const center = mode === "stadium" ? { x: 350, y: 400 } : { x: 350, y: 250 };
+        const dx = seat.x - center.x;
+        const dy = seat.y - center.y;
+        const angle = Math.atan2(dy, dx) + delta;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        updates[seatId] = {
+          ...sd[seatId],
+          x: center.x + dist * Math.cos(angle),
+          y: center.y + dist * Math.sin(angle),
+        };
+      });
+      return updates;
+    });
+  }
+
+  // --- Export/Import JSON ---
+  function exportSeats() {
+    const data = JSON.stringify(seats, null, 2);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(data);
+    const downloadAnchorNode = document.createElement("a");
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", mode + "_seats.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  }
+  function importSeats(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = event => {
+      try {
+        const data = JSON.parse(event.target.result);
+        // seatData is a map { id: seat }
+        const newData = {};
+        data.forEach(seat => { newData[seat.id] = seat; });
+        setSeatData(newData);
+        // Optionally update seatsPerRow, etc. if importing as a new layout
+      } catch (err) {
+        alert("Invalid JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // --- Section controls ---
+  function addSection() {
+    const name = prompt("Section name:");
+    const color = prompt("Section color (hex):", "#1976d2");
+    if (name && color) setSections([...sections, { name, color }]);
+  }
+
+  // --- Save/Load Handlers ---
+  const saveLayoutToBackend = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/venues/${venueId}/layout`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(seats),
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Save failed");
+      alert("Layout saved!");
+    } catch (err) {
+      alert("Failed to save: " + err.message);
+    }
+  }, [venueId, seats]);
+
+  const loadLayoutFromBackend = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/venues/${venueId}/layout`, {
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Load failed");
+      const data = await response.json();
+      const newData = {};
+      data.forEach(seat => { newData[seat.id] = seat; });
+      setSeatData(newData);
+      alert("Layout loaded!");
+    } catch (err) {
+      alert("Failed to load: " + err.message);
+    }
+  }, [venueId]);
+
+  // --- UI Controls ---
+  const stadiumControls = (
+    <>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Arc:{" "}
+          <input
+            type="range"
+            min={Math.PI / 4}
+            max={Math.PI * 2}
+            step={0.01}
+            value={arcAngle}
+            onChange={e => setArcAngle(Number(e.target.value))}
+            style={{ width: 120 }}
+          />
+          <span style={{ marginLeft: 8 }}>{(arcAngle * 180 / Math.PI).toFixed(0)}°</span>
+        </label>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Row spacing:{" "}
+          <input
+            type="number"
+            min={10}
+            max={100}
+            value={rowSpacing}
+            onChange={e => setRowSpacing(Number(e.target.value))}
+            style={{ width: 60 }}
+          /> px
+        </label>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Start radius:{" "}
+          <input
+            type="number"
+            min={40}
+            max={400}
+            value={startRadius}
+            onChange={e => setStartRadius(Number(e.target.value))}
+            style={{ width: 60 }}
+          /> px
+        </label>
+      </div>
+      <div>
+        <strong>Rows:</strong>{" "}
+        <button type="button" onClick={() => {
+          setSeatsPerRow([...seatsPerRow, seatsPerRow[seatsPerRow.length - 1] || 10]);
+          setRowRotations([...rowRotations, 0]);
+          setRowSections([...rowSections, sections[0]]);
+        }}>
+          Add Row
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (seatsPerRow.length > 1) {
+              setSeatsPerRow(seatsPerRow.slice(0, -1));
+              setRowRotations(rowRotations.slice(0, -1));
+              setRowSections(rowSections.slice(0, -1));
+            }
+          }}
+          disabled={seatsPerRow.length <= 1}
+        >
+          Remove Row
+        </button>
+        <div style={{ marginTop: 8 }}>
+          {seatsPerRow.map((count, i) => (
+            <div key={i} style={{ marginBottom: 4 }}>
+              Row {i + 1}:{" "}
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={count}
+                onChange={e => {
+                  const n = Math.max(1, parseInt(e.target.value) || 1);
+                  setSeatsPerRow(seatsPerRow.map((s, idx) => (idx === i ? n : s)));
+                }}
+                style={{ width: 50 }}
+              />{" "}
+              seats
+              <button onClick={() => rotateRow(i, Math.PI / 36)} style={{ marginLeft: 6 }}>⟳</button>
+              <button onClick={() => rotateRow(i, -Math.PI / 36)}>⟲</button>
+              <span style={{ marginLeft: 8 }}>
+                Section:{" "}
+                <select
+                  value={rowSections[i]?.name}
+                  onChange={e => {
+                    const sec = sections.find(s => s.name === e.target.value);
+                    setRowSections(rowSections.map((s, idx) => idx === i ? sec : s));
+                  }}
+                  style={{ background: rowSections[i]?.color, color: "#fff" }}
+                >
+                  {sections.map(s => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <strong>Total seats:</strong> {seats.length}
+      </div>
+    </>
+  );
+
+  const tableControls = (
+    <>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Seat count:{" "}
+          <input
+            type="number"
+            min={1}
+            max={40}
+            value={tableSeatCount}
+            onChange={e => setTableSeatCount(Number(e.target.value))}
+            style={{ width: 50 }}
+          />
+        </label>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Rotation:{" "}
+          <input
+            type="range"
+            min={0}
+            max={Math.PI * 2}
+            step={0.01}
+            value={tableRotation}
+            onChange={e => setTableRotation(Number(e.target.value))}
+            style={{ width: 120 }}
+          />
+          <span style={{ marginLeft: 8 }}>{(tableRotation * 180 / Math.PI).toFixed(0)}°</span>
+        </label>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label>
+          Section:{" "}
+          <select
+            value={tableSection.name}
+            onChange={e => {
+              const sec = sections.find(s => s.name === e.target.value);
+              setTableSection(sec);
+            }}
+            style={{ background: tableSection.color, color: "#fff" }}
+          >
+            {sections.map(s => (
+              <option key={s.name} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <strong>Total seats:</strong> {seats.length}
+      </div>
+    </>
+  );
+
+  // --- Section list and add ---
+  const sectionList = (
+    <div>
+      <strong>Sections:</strong>{" "}
+      <button type="button" onClick={addSection}>Add Section</button>
+      <ul style={{ fontSize: 13, marginTop: 8, paddingLeft: 20 }}>
+        {sections.map(s => (
+          <li key={s.name} style={{ color: s.color }}>{s.name} <span style={{ background: s.color, color: "#fff", padding: "0 8px", borderRadius: 4 }}>{s.color}</span></li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      <div style={{ minWidth: 290 }}>
+        <h3>Venue Designer</h3>
+        <div style={{ marginBottom: 14 }}>
+          <label>
+            <input
+              type="radio"
+              checked={mode === "stadium"}
+              onChange={() => setMode("stadium")}
+            />{" "}
+            Stadium
+          </label>{" "}
+          <label style={{ marginLeft: 10 }}>
+            <input
+              type="radio"
+              checked={mode === "table"}
+              onChange={() => setMode("table")}
+            />{" "}
+            Circular Table
+          </label>
+        </div>
+        {mode === "stadium" ? stadiumControls : tableControls}
+        <div style={{ marginTop: 18 }}>
+          <button onClick={exportSeats}>Export Seats as JSON</button>
+          <input type="file" accept="application/json" onChange={importSeats} style={{ marginLeft: 10 }} />
+          <div style={{ marginTop: 10 }}>
+            <button onClick={saveLayoutToBackend}>Save to Backend</button>
+            <button onClick={loadLayoutFromBackend} style={{ marginLeft: 10 }}>Load from Backend</button>
+          </div>
+        </div>
+        <div style={{ marginTop: 18 }}>{sectionList}</div>
+        <div style={{ marginTop: 18, color: "#666", fontSize: 13 }}>
+          <strong>Tips:</strong>
+          <ul style={{ marginTop: 6 }}>
+            <li>Click seat: select</li>
+            <li>Shift+Click: edit seat (label, price, section)</li>
+            <li>Ctrl/Cmd+Click: multi-select</li>
+            <li>Drag seat (or multi-selection): move</li>
+            <li>⟳⟲: rotate row (stadium mode)</li>
+            <li>Rotate group: use buttons below</li>
+          </ul>
+        </div>
+        {selected.length > 1 && (
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => rotateSelected(Math.PI / 36)}>⟳ Rotate Group</button>
+            <button onClick={() => rotateSelected(-Math.PI / 36)} style={{ marginLeft: 6 }}>⟲ Rotate Group</button>
+          </div>
+        )}
+      </div>
+      <svg
+        ref={svgRef}
+        width={700}
+        height={500}
+        style={{ background: "#f2f4fa", borderRadius: 20, border: "1px solid #ddd" }}
+      >
+        {/* Stadium stage or table */}
+        {mode === "stadium" ? (
+          <>
+            <ellipse
+              cx={350}
+              cy={405}
+              rx={90}
+              ry={20}
+              fill="#333"
+              opacity={0.3}
+            />
+            <text
+              x={350}
+              y={412}
+              textAnchor="middle"
+              fill="#222"
+              fontWeight="bold"
+              fontSize={16}
+            >
+              STAGE
+            </text>
+          </>
+        ) : (
+          <>
+            <circle
+              cx={350}
+              cy={250}
+              r={40}
+              fill="#e0e0e0"
+              stroke="#999"
+              strokeWidth={2}
+            />
+            <text
+              x={350}
+              y={250}
+              textAnchor="middle"
+              fill="#222"
+              fontWeight="bold"
+              fontSize={16}
+              dy={6}
+            >
+              Table
+            </text>
+          </>
+        )}
+        {/* Seats */}
+        {seats.map(seat => {
+          const sectionObj = sections.find(s => s.name === seat.section) || { color: "#fff" };
+          return (
+            <g key={seat.id}>
+              <circle
+                cx={seat.x}
+                cy={seat.y}
+                r={15}
+                fill={selected.includes(seat.id) ? "#1976d2" : sectionObj.color}
+                stroke="#444"
+                strokeWidth={selected.includes(seat.id) ? 3 : 1.5}
+                style={{ cursor: "pointer" }}
+                onClick={e => {
+                  // Shift+Click = edit, Ctrl/Cmd+Click = multi-select, else single select
+                  if (e.shiftKey) onEditSeat(seat);
+                  else if (e.ctrlKey || e.metaKey) {
+                    setSelected(sel =>
+                      sel.includes(seat.id) ? sel.filter(id => id !== seat.id) : [...sel, seat.id]
+                    );
+                  } else {
+                    setSelected([seat.id]);
+                  }
+                }}
+                onMouseDown={e => onSeatMouseDown(seat, e)}
+              />
+              <text
+                x={seat.x}
+                y={seat.y + 5}
+                textAnchor="middle"
+                fontSize={12}
+                fill={selected.includes(seat.id) ? "#fff" : "#222"}
+                pointerEvents="none"
+                style={{ fontWeight: 700 }}
+              >
+                {seat.label}
+              </text>
+              {/* Price display */}
+              <text
+                x={seat.x}
+                y={seat.y + 17}
+                textAnchor="middle"
+                fontSize={10}
+                fill="#555"
+                pointerEvents="none"
+                style={{ fontWeight: 500 }}
+              >
+                ${seat.price}
+              </text>
+              {/* Section display */}
+              <text
+                x={seat.x}
+                y={seat.y - 12}
+                textAnchor="middle"
+                fontSize={9}
+                fill={sectionObj.color}
+                stroke="#fff"
+                strokeWidth={0.8}
+                style={{ fontWeight: 700, paintOrder: "stroke fill" }}
+                pointerEvents="none"
+              >
+                {seat.section}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}import React from "react";
+import { Stage, Layer, Group, Rect, Text } from "react-konva";
+const getHeatColor = occupancy => {
+  if (occupancy > 5) return "#e53935";
+  if (occupancy > 2) return "#ffb300";
+  if (occupancy > 0) return "#43a047";
+  return "#1976d2";
+};
+export default function AnalyticsHeatmap({ seats = [] }) {
+  return (
+    <Stage width={800} height={500} style={{ border: "1px solid #bbb", background: "#fafafa" }}>
+      <Layer>
+        {seats.map((seat, idx) => (
+          <Group key={idx} x={seat.x} y={seat.y}>
+            <Rect
+              width={seat.width || 36}
+              height={seat.height || 36}
+              fill={getHeatColor(seat.occupancy || 0)}
+              stroke="#fff"
+              strokeWidth={2}
+              cornerRadius={18}
+            />
+            <Text
+              text={seat.label}
+              fontSize={16}
+              align="center"
+              verticalAlign="middle"
+              width={seat.width || 36}
+              height={seat.height || 36}
+              fill="#fff"
+              offsetY={-4}
+              y={8}
+            />
+            <Text
+              text={String(seat.occupancy || 0)}
+              fontSize={12}
+              fill="#fff"
+              x={0}
+              y={22}
+              width={seat.width || 36}
+              align="center"
+            />
+          </Group>
+        ))}
+      </Layer>
+    </Stage>
+  );
+} import React, { useEffect, useState } from "react";
+import { Box, Typography, Paper, Stack, Divider, CircularProgress } from "@mui/material";
+import { fetchVenueAnalytics } from "../api/analyticsApi";
+import AnalyticsHeatmap from "./AnalyticsHeatmap";
+
+export default function AnalyticsPanel({ venueId }) {
+  const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState([]);
+  const [stats, setStats] = useState({ totalSeats: 0, sold: 0, reserved: 0, available: 0, revenue: 0 });
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await fetchVenueAnalytics(venueId);
+        if (!mounted) return;
+        setAnalytics(data);
+        // Compute stats
+        const totalSeats = data.length;
+        let sold = 0, reserved = 0, available = 0, revenue = 0;
+        data.forEach(seat => {
+          if (seat.status === "sold" || seat.occupancy > 0) sold++;
+          else if (seat.status === "reserved") reserved++;
+          else available++;
+          revenue += (seat.occupancy || 0) * (Number(seat.price) || 0);
+        });
+        setStats({ totalSeats, sold, reserved, available, revenue });
+      } catch (err) {
+        setAnalytics([]);
+        setStats({ totalSeats: 0, sold: 0, reserved: 0, available: 0, revenue: 0 });
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+    return () => { mounted = false; };
+  }, [venueId]);
+
+  return (
+    <Box>
+      <Typography variant="h6" sx={{ mb: 2 }}>
+        Venue Analytics
+      </Typography>
+      {loading ? (
+        <Box display="flex" justifyContent="center" py={8}>
+          <CircularProgress />
+        </Box>
+      ) : (
+        <>
+          <Paper variant="outlined" sx={{ mb: 3, p: 2 }}>
+            <Stack direction="row" spacing={4} divider={<Divider orientation="vertical" flexItem />}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Total Seats</Typography>
+                <Typography variant="h6">{stats.totalSeats}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Sold</Typography>
+                <Typography variant="h6" color="success.main">{stats.sold}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Reserved</Typography>
+                <Typography variant="h6" color="warning.main">{stats.reserved}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Available</Typography>
+                <Typography variant="h6" color="info.main">{stats.available}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Revenue</Typography>
+                <Typography variant="h6">${stats.revenue.toLocaleString()}</Typography>
+              </Box>
+            </Stack>
+          </Paper>
+          <AnalyticsHeatmap seats={analytics} />
+        </>
+      )}
+    </Box>
+  );
+}import React, { useRef, useState } from "react";
+import { Button, Snackbar } from "@mui/material";
+
+export default function ImportExportPanel({ seats, onImport, onExport }) {
+  const fileRef = useRef();
+  const [snack, setSnack] = useState("");
+  const handleExport = () => {
+    const data = JSON.stringify(seats, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "seatmap.json";
+    link.click();
+    setSnack("Exported seat map!");
+  };
+  const handleImport = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const data = JSON.parse(evt.target.result);
+        onImport(data);
+        setSnack("Import successful!");
+      } catch {
+        setSnack("Import failed: invalid file.");
+      }
+    };
+    reader.readAsText(file);
+  };
+  return (
+    <div>
+      <Button onClick={handleExport}>Export Seat Map</Button>
+      <Button component="label">
+        Import Seat Map
+        <input type="file" accept=".json" hidden onChange={handleImport} ref={fileRef} />
+      </Button>
+      <Snackbar open={!!snack} onClose={()=>setSnack("")} message={snack} autoHideDuration={3000} />
+    </div>
+  );
+}import React, { useState, useEffect } from "react";
+import {
+  Typography, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Button, Dialog, DialogTitle, DialogContent, TextField, DialogActions
+} from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { fetchSeatsBySection, createSeat, updateSeat, deleteSeat } from "../api/venueApi";
+
+export default function SeatList({ sectionId }) {
+  const [seats, setSeats] = useState([]);
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingSeat, setEditingSeat] = useState(null);
+
+  const reload = () => fetchSeatsBySection(sectionId).then(setSeats);
+  useEffect(() => { reload(); }, [sectionId]);
+
+  const handleSave = async (seat) => {
+    if (seat.id) await updateSeat(seat.id, seat);
+    else await createSeat({ ...seat, section_id: sectionId });
+    setShowDialog(false);
+    reload();
+  };
+
+  const handleDelete = async (id) => {
+    await deleteSeat(id);
+    reload();
+  };
+
+  return (
+    <div>
+      <Typography variant="subtitle1" sx={{ mt: 2 }}>Seats</Typography>
+      <Button onClick={() => { setEditingSeat(null); setShowDialog(true); }} variant="outlined" sx={{ mb: 2 }}>Add Seat</Button>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Label</TableCell><TableCell>Row</TableCell><TableCell>Number</TableCell>
+            <TableCell>Type</TableCell><TableCell>Price</TableCell><TableCell>Status</TableCell>
+            <TableCell />
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {seats.map(seat => (
+            <TableRow key={seat.id}>
+              <TableCell>{seat.label}</TableCell>
+              <TableCell>{seat.row}</TableCell>
+              <TableCell>{seat.number}</TableCell>
+              <TableCell>{seat.type}</TableCell>
+              <TableCell>{seat.price}</TableCell>
+              <TableCell>{seat.status}</TableCell>
+              <TableCell>
+                <IconButton onClick={() => { setEditingSeat(seat); setShowDialog(true); }}><EditIcon /></IconButton>
+                <IconButton onClick={() => handleDelete(seat.id)}><DeleteIcon /></IconButton>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <SeatDialog
+        open={showDialog}
+        seat={editingSeat}
+        onClose={() => setShowDialog(false)}
+        onSave={handleSave}
+      />
+    </div>
+  );
+}
+
+function SeatDialog({ open, seat, onClose, onSave }) {
+  const [form, setForm] = useState(seat || { label: "", row: "", number: "", type: "", price: "", status: "available" });
+  useEffect(() => setForm(seat || { label: "", row: "", number: "", type: "", price: "", status: "available" }), [seat, open]);
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>{seat ? "Edit Seat" : "Add Seat"}</DialogTitle>
+      <DialogContent>
+        <TextField label="Label" value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} fullWidth required sx={{ mb: 2 }} />
+        <TextField label="Row" value={form.row} onChange={e => setForm(f => ({ ...f, row: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="Number" value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="Type" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="Price" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} fullWidth type="number" sx={{ mb: 2 }} />
+        <TextField label="Status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={() => onSave(form)} disabled={!form.label} variant="contained">Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}import React from 'react';
+import { Box, Tooltip } from '@mui/material';
+
+// seats: array of {id, label, row, number, x, y, type, status, ticket_status, booked_by}
+// selected: array of seat ids
+// onSelect: fn(seatId)
+const SeatColor = (seat) => {
+  if (seat.ticket_status === 'paid') return '#d32f2f';      // red: sold
+  if (seat.ticket_status === 'reserved') return '#fbc02d';  // yellow: held
+  if (seat.type === 'VIP') return '#1976d2';                // blue: VIP
+  if (seat.type === 'Regular') return '#43a047';            // green: Regular
+  return '#90a4ae';                                         // grey: other
+};
+
+const SeatMap = ({ seats, selected, onSelect }) => (
+  <Box sx={{ width: 600, height: 400, position: 'relative', border: '1px solid #eee', my: 2 }}>
+    <svg width="100%" height="100%">
+      {seats.map(seat => (
+        <Tooltip key={seat.id} title={`${seat.label} (${seat.row}${seat.number}) - ${seat.type} - ${seat.ticket_status || 'available'}`}>
+          <circle
+            cx={seat.x * 5}
+            cy={seat.y * 5}
+            r={14}
+            fill={selected.includes(seat.id) ? '#ffd600' : SeatColor(seat)}
+            stroke={seat.ticket_status ? '#333' : '#888'}
+            strokeWidth={selected.includes(seat.id) ? 3 : 1}
+            style={{ cursor: seat.ticket_status ? 'not-allowed' : 'pointer' }}
+            onClick={() => !seat.ticket_status && onSelect(seat.id)}
+          />
+        </Tooltip>
+      ))}
+    </svg>
+  </Box>
+);
+
+export default SeatMap;import React, { useEffect, useState } from "react";
+import {
+  Box, Paper,
+  Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Typography, Snackbar
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import { fetchSeatsBySection, createSeat, updateSeat, deleteSeat } from "../api/venueApi";
+
+const GRID_ROWS = 10;
+const GRID_COLS = 20;
+
+export default function SeatMapDesigner({ sectionId }) {
+  console.log("sectionId:", sectionId);
+
+  const [seats, setSeats] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ label: "", row: 0, number: 0, type: "", price: 0, status: "available" });
+  const [editingId, setEditingId] = useState(null);
+  const [snack, setSnack] = useState("");
+
+  // Load seats
+  const reload = () => {
+    if (!sectionId) return setSeats([]);
+    fetchSeatsBySection(sectionId).then(setSeats);
+  };
+  useEffect(() => { reload(); }, [sectionId]);
+
+  // Build grid
+  const grid = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(null));
+  seats.forEach(s => {
+    const r = parseInt(s.row, 10);
+    const c = parseInt(s.number, 10);
+    if (!isNaN(r) && !isNaN(c) && r >= 0 && r < GRID_ROWS && c >= 0 && c < GRID_COLS) {
+      grid[r][c] = s;
+    }
+  });
+
+  // Open dialog for add/edit
+  const handleOpen = (r, c, seat = null) => {
+    if (seat) {
+      setForm({
+        label: seat.label || "",
+        row: parseInt(seat.row, 10),
+        number: parseInt(seat.number, 10),
+        type: seat.type || "",
+        price: seat.price || 0,
+        status: seat.status || "available"
+      });
+      setEditingId(seat.id);
+    } else {
+      setForm({ label: "", row: r, number: c, type: "", price: 0, status: "available" });
+      setEditingId(null);
+    }
+    setOpen(true);
+  };
+
+  // Close dialog
+  const handleClose = () => setOpen(false);
+
+  // Save (create or update)
+  const handleSave = async () => {
+    const payload = {
+      section_id: sectionId,      // <-- only this is required
+      label:      form.label,
+      row:        form.row,
+      number:     form.number,
+      type:       form.type,
+      price:      form.price,
+      status:     form.status,
+      x:          form.x,
+      y:          form.y,
+      properties: form.properties || {}
+    };
+    console.log("Posting payload:", payload);
+
+    try {
+      await createSeat(payload);
+      setOpen(false);
+      reload();
+    } catch (err) {
+      console.error(err);
+      setSnack("Failed to create seat");
+    }
+  };
+
+  // Delete seat
+  const handleDelete = async (id) => {
+    try {
+      await deleteSeat(id);
+      reload();
+    } catch(err){
+      console.error("Delete failed", err);
+      setSnack("Failed to delete seat");
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="h6" gutterBottom>Seat Designer</Typography>
+      <Paper sx={{ p: 2, overflowX: "auto" }}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateRows: `repeat(${GRID_ROWS}, 36px)`,
+            gridTemplateColumns: `repeat(${GRID_COLS}, 36px)`,
+            gap: 1
+          }}
+        >
+          {grid.map((rowArr, r) =>
+            rowArr.map((cell, c) => (
+              <Box
+                key={`${r}-${c}`}
+                sx={{
+                  width: 36,
+                  height: 36,
+                  bgcolor: cell ? "#1976d2" : "#eee",
+                  border: cell ? "2px solid #1976d2" : "1px dashed #aaa",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  position: "relative"
+                }}
+                onClick={() => handleOpen(r, c, cell)}
+              >
+                {cell ? (
+                  <>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#fff", fontWeight: 700 }}
+                    >
+                      {cell.row}-{cell.number}
+                    </Typography>
+                    <Box
+                      component="span"
+                      sx={{
+                        position: "absolute",
+                        top: 2,
+                        right: 2,
+                        fontSize: 10,
+                        bgcolor: "rgba(255,255,255,0.8)",
+                        px: 0.5,
+                        borderRadius: 0.5,
+                        cursor: "pointer"
+                      }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleDelete(cell.id);
+                      }}
+                    >
+                      <DeleteIcon fontSize="inherit" />
+                    </Box>
+                  </>
+                ) : (
+                  <AddIcon fontSize="small" sx={{ color: "#888" }} />
+                )}
+              </Box>
+            ))
+          )}
+        </Box>
+      </Paper>
+
+      {/* Seat Form Dialog */}
+      <Dialog open={open} onClose={handleClose}>
+        <DialogTitle>{editingId ? "Edit Seat" : "Add Seat"}</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+          <TextField
+            label="Label"
+            value={form.label}
+            onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+            fullWidth
+          />
+          <TextField
+            label="Type"
+            value={form.type}
+            onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+            fullWidth
+          />
+          <TextField
+            label="Price"
+            type="number"
+            value={form.price}
+            onChange={e => setForm(f => ({ ...f, price: parseFloat(e.target.value) }))}
+            fullWidth
+          />
+          <TextField
+            label="Status"
+            value={form.status}
+            onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+            fullWidth
+          />
+          <TextField
+            label="Row"
+            value={form.row ?? ""}
+            disabled
+            fullWidth
+          />
+          <TextField
+            label="Number"
+            value={form.number ?? ""}
+            disabled
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Cancel</Button>
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            disabled={!form.label}
+          >
+            {editingId ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!snack}
+        autoHideDuration={3000}
+        onClose={() => setSnack("")}
+        message={snack}
+      />
+    </Box>
+  );
+}
+import React from "react";
+import { Stage, Layer, Group, Rect, Text } from "react-konva";
+
+export default function SeatMapSelector({ seats = [], onSelectSeat, selectedSeats = [] }) {
+  return (
+    <Stage
+      width={800}
+      height={500}
+      tabIndex={0}
+      role="region"
+      aria-label="Seat selection map"
+      style={{ border: "1px solid #bbb", background: "#fafafa" }}
+    >
+      <Layer>
+        {seats.map((seat, idx) => (
+          <Group
+            key={seat.id}
+            x={seat.x}
+            y={seat.y}
+            tabIndex={0}
+            role="button"
+            aria-label={`Seat ${seat.label}, row ${seat.row}, ${seat.type}, ${seat.status}`}
+            onClick={() => seat.status === "available" && onSelectSeat(seat)}
+            onKeyDown={e => {
+              if (["Enter", " "].includes(e.key) && seat.status === "available") {
+                onSelectSeat(seat);
+              }
+            }}
+            style={{
+              cursor: seat.status === "available" ? "pointer" : "not-allowed",
+              outline: selectedSeats.includes(seat.id) ? "2px solid #1976d2" : "none"
+            }}
+          >
+            <Rect
+              width={seat.width || 36}
+              height={seat.height || 36}
+              fill={
+                selectedSeats.includes(seat.id)
+                  ? "#1976d2"
+                  : seat.status === "available"
+                  ? "#43a047"
+                  : seat.status === "reserved"
+                  ? "#ffb300"
+                  : "#bdbdbd"
+              }
+              stroke="#fff"
+              strokeWidth={2}
+              cornerRadius={18}
+              opacity={seat.status === "sold" ? 0.6 : 1}
+            />
+            <Text
+              text={seat.label}
+              fontSize={16}
+              align="center"
+              verticalAlign="middle"
+              width={seat.width || 36}
+              height={seat.height || 36}
+              fill="#fff"
+              offsetY={-4}
+              y={8}
+            />
+          </Group>
+        ))}
+      </Layer>
+    </Stage>
+  );
+}import React, { useState, useEffect } from "react";
+import {
+  Typography, Box, List, ListItem, ListItemText, IconButton, Button,
+  Dialog, DialogTitle, DialogContent, TextField, DialogActions, Divider, Tabs, Tab
+} from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import { fetchSections, createSection, updateSection, deleteSection } from "../api/venueApi";
+import SeatMapDesigner from "./SeatMapDesigner";
+import SeatList from "./SeatList";
+
+export default function SectionList({ venueId }) {
+  const [sections, setSections] = useState([]);
+  const [selectedSection, setSelectedSection] = useState(null);
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingSection, setEditingSection] = useState(null);
+  const [form, setForm] = useState({ name: "", description: "" });
+  const [tab, setTab] = useState(0);
+
+  const reload = () => fetchSections(venueId).then(setSections);
+
+  useEffect(() => {
+    fetchSections(venueId).then(data => {
+      console.log("Fetched sections:", data);
+      setSections(data);
+    });
+  }, [venueId]);
+
+  const handleOpenDialog = (section = null) => {
+    setEditingSection(section);
+    setForm(section ? { ...section } : { name: "", description: "" });
+    setShowDialog(true);
+  };
+
+  const handleSave = async () => {
+    if (editingSection && editingSection.id) {
+      await updateSection(editingSection.id, { ...editingSection, ...form });
+    } else {
+      await createSection({ ...form, venue_id: venueId });
+    }
+    setShowDialog(false);
+    reload();
+  };
+
+  const handleDelete = async (id) => {
+    await deleteSection(id);
+    if (selectedSection?.id === id) setSelectedSection(null);
+    reload();
+  };
+
+  console.log("selectedSection:", selectedSection);
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" mb={2}>
+        <Typography variant="h6">Sections</Typography>
+        <Button startIcon={<AddIcon />} onClick={() => handleOpenDialog(null)}>Add Section</Button>
+      </Box>
+      <List>
+        {sections.map(section => (
+          <ListItem key={section.id} button selected={selectedSection?.id === section.id}
+            onClick={() => {
+              console.log("Clicked section:", section); // ✅
+              setSelectedSection(section);
+            }}>
+            <ListItemText primary={section.name} secondary={section.description} />
+            <IconButton onClick={e => { e.stopPropagation(); handleOpenDialog(section); }}><EditIcon /></IconButton>
+            <IconButton onClick={e => { e.stopPropagation(); handleDelete(section.id); }}><DeleteIcon /></IconButton>
+          </ListItem>
+        ))}
+      </List>
+      <Divider sx={{ my: 2 }} />
+      {selectedSection && selectedSection.id && (
+        <>
+          {console.log("Rendering SeatMapDesigner with sectionId:", selectedSection.id)}
+          <Box mt={1}>
+            <Tabs value={tab} onChange={(_, t) => setTab(t)}>
+              <Tab label="Seat Table" />
+              <Tab label="Seat Map Designer" />
+            </Tabs>
+            {tab === 0 && (
+              <Box>
+                <SeatList sectionId={selectedSection.id} />
+              </Box>
+            )}
+            {tab === 1 && (
+              <SeatMapDesigner
+                venueId={venueId}
+                sectionId={selectedSection.id}
+              />
+            )}
+          </Box>
+        </>
+      )}
+      <Dialog open={showDialog} onClose={() => setShowDialog(false)}>
+        <DialogTitle>{editingSection ? "Edit Section" : "Add Section"}</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Name"
+            fullWidth
+            sx={{ mb: 2 }}
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            required
+          />
+          <TextField
+            label="Description"
+            fullWidth
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            multiline
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDialog(false)}>Cancel</Button>
+          <Button onClick={handleSave} disabled={!form.name} variant="contained">Save</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}import React, { useState } from "react";
+
+// Utility to generate a stadium (curved) section
+function createCurvedRows({
+  centerX,
+  centerY,
+  startRadius,
+  rowSpacing,
+  seatsPerRow,
+  arcAngle = Math.PI // e.g. Math.PI for half-circle
+}) {
+  let seats = [];
+  for (let row = 0; row < seatsPerRow.length; row++) {
+    const radius = startRadius + row * rowSpacing;
+    for (let i = 0; i < seatsPerRow[row]; i++) {
+      const angle =
+        seatsPerRow[row] === 1
+          ? 0
+          : -arcAngle / 2 + (arcAngle * i) / (seatsPerRow[row] - 1); // spread evenly
+      seats.push({
+        id: `R${row + 1}S${i + 1}`,
+        row: row + 1,
+        number: i + 1,
+        x: centerX + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+      });
+    }
+  }
+  return seats;
+}
+
+export default function StadiumDesigner() {
+  // Interactive parameters
+  const [arcAngle, setArcAngle] = useState(Math.PI * 1.1);
+  const [rowSpacing, setRowSpacing] = useState(35);
+  const [startRadius, setStartRadius] = useState(120);
+  const [seatsPerRow, setSeatsPerRow] = useState([10, 14, 18, 22, 26]);
+  const [selected, setSelected] = useState([]);
+
+  // Add a new row with default seat count
+  const addRow = () => setSeatsPerRow([...seatsPerRow, seatsPerRow[seatsPerRow.length - 1] || 10]);
+  // Remove the last row
+  const removeRow = () => seatsPerRow.length > 1 && setSeatsPerRow(seatsPerRow.slice(0, -1));
+  // Change seat count for a specific row
+  const updateSeatCount = (rowIdx, val) => {
+    const n = Math.max(1, parseInt(val) || 1);
+    setSeatsPerRow(seatsPerRow.map((s, i) => (i === rowIdx ? n : s)));
+  };
+
+  // Generate seat positions
+  const seats = createCurvedRows({
+    centerX: 350,
+    centerY: 400,
+    startRadius,
+    rowSpacing,
+    seatsPerRow,
+    arcAngle,
+  });
+
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      {/* Controls */}
+      <div style={{ minWidth: 220 }}>
+        <h3>Stadium Controls</h3>
+        <div style={{ marginBottom: 12 }}>
+          <label>
+            Arc:{" "}
+            <input
+              type="range"
+              min={Math.PI / 4}
+              max={Math.PI * 2}
+              step={0.01}
+              value={arcAngle}
+              onChange={e => setArcAngle(Number(e.target.value))}
+              style={{ width: 120 }}
+            />
+            <span style={{ marginLeft: 8 }}>{(arcAngle * 180 / Math.PI).toFixed(0)}°</span>
+          </label>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label>
+            Row spacing:{" "}
+            <input
+              type="number"
+              min={10}
+              max={100}
+              value={rowSpacing}
+              onChange={e => setRowSpacing(Number(e.target.value))}
+              style={{ width: 60 }}
+            /> px
+          </label>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label>
+            Start radius:{" "}
+            <input
+              type="number"
+              min={40}
+              max={400}
+              value={startRadius}
+              onChange={e => setStartRadius(Number(e.target.value))}
+              style={{ width: 60 }}
+            /> px
+          </label>
+        </div>
+        <div>
+          <strong>Rows:</strong>{" "}
+          <button type="button" onClick={addRow}>Add Row</button>
+          <button type="button" onClick={removeRow} disabled={seatsPerRow.length <= 1}>Remove Row</button>
+          <div style={{ marginTop: 8 }}>
+            {seatsPerRow.map((count, i) => (
+              <div key={i} style={{ marginBottom: 4 }}>
+                Row {i + 1}:{" "}
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={count}
+                  onChange={e => updateSeatCount(i, e.target.value)}
+                  style={{ width: 50 }}
+                />{" "}
+                seats
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <strong>Total seats:</strong> {seats.length}
+        </div>
+      </div>
+      {/* SVG Stadium */}
+      <svg width={700} height={500} style={{ background: "#f2f4fa", borderRadius: 20 }}>
+        {/* Stadium stage */}
+        <ellipse
+          cx={350}
+          cy={405}
+          rx={90}
+          ry={20}
+          fill="#333"
+          opacity={0.3}
+        />
+        <text x={350} y={412} textAnchor="middle" fill="#222" fontWeight="bold" fontSize={16}>
+          STAGE
+        </text>
+        {/* Seats */}
+        {seats.map(seat => (
+          <g key={seat.id}>
+            <circle
+              cx={seat.x}
+              cy={seat.y}
+              r={15}
+              fill={selected.includes(seat.id) ? "#1976d2" : "#fff"}
+              stroke="#444"
+              strokeWidth={selected.includes(seat.id) ? 3 : 1.5}
+              style={{ cursor: "pointer" }}
+              onClick={() =>
+                setSelected(sel =>
+                  sel.includes(seat.id)
+                    ? sel.filter(id => id !== seat.id)
+                    : [...sel, seat.id]
+                )
+              }
+            />
+            <text
+              x={seat.x}
+              y={seat.y + 5}
+              textAnchor="middle"
+              fontSize={12}
+              fill={selected.includes(seat.id) ? "#fff" : "#222"}
+              pointerEvents="none"
+              style={{ fontWeight: 700 }}
+            >
+              {seat.row}-{seat.number}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}import React, { useState, useRef, useMemo } from "react";
+
+// Helper: generate seats for a table
+function generateTableSeats({ table, cx, cy }) {
+  const seats = [];
+  const { seatCount, radius, rotation, label, section, color } = table;
+  for (let i = 0; i < seatCount; i++) {
+    const angle = rotation + (2 * Math.PI * i) / seatCount;
+    seats.push({
+      id: `${label}-S${i + 1}`,
+      tableLabel: label,
+      seatNumber: i + 1,
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+      angle,
+      label: `S${i + 1}`,
+      price: 100,
+      section,
+      color,
+    });
+  }
+  return seats;
+}
+
+const DEFAULT_SECTIONS = [
+  { name: "VIP", color: "#FFD700" },
+  { name: "General", color: "#1976d2" },
+  { name: "Balcony", color: "#9c27b0" },
+];
+
+const DEFAULT_TABLES = [
+  { label: "Table 1", seatCount: 8, radius: 90, rotation: 0, section: "VIP", color: "#FFD700", cx: 200, cy: 200 },
+  { label: "Table 2", seatCount: 10, radius: 100, rotation: 0, section: "General", color: "#1976d2", cx: 500, cy: 300 },
+];
+
+export default function TableSeatmapDesigner({ onSave }) {
+  const [tables, setTables] = useState(DEFAULT_TABLES);
+  const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [seatData, setSeatData] = useState({});
+  const [selected, setSelected] = useState([]);
+  const [draggedSeats, setDraggedSeats] = useState([]);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const svgRef = useRef();
+
+  // Compute all seats
+  const seats = useMemo(() => {
+    let result = [];
+    for (const table of tables) {
+      const tableSeats = generateTableSeats({
+        table,
+        cx: table.cx,
+        cy: table.cy,
+      });
+      result = result.concat(
+        tableSeats.map(seat =>
+          seatData[seat.id] ? { ...seat, ...seatData[seat.id] } : seat
+        )
+      );
+    }
+    return result;
+  }, [tables, seatData]);
+
+  // --- Drag logic ---
+  function onSeatMouseDown(seat, e) {
+    const seatIds = selected.includes(seat.id) ? selected : [seat.id];
+    setDraggedSeats(seatIds);
+
+    const svgRect = svgRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - seat.x - svgRect.left,
+      y: e.clientY - seat.y - svgRect.top,
+    });
+
+    window.addEventListener("mousemove", onSeatMouseMove);
+    window.addEventListener("mouseup", onSeatMouseUp);
+  }
+  function onSeatMouseMove(e) {
+    if (!draggedSeats.length) return;
+    const svgRect = svgRef.current.getBoundingClientRect();
+    setSeatData(sd => {
+      const updates = { ...sd };
+      draggedSeats.forEach(seatId => {
+        const orig = seats.find(s => s.id === seatId);
+        if (!orig) return;
+        updates[seatId] = {
+          ...sd[seatId],
+          x: e.clientX - svgRect.left - dragOffset.x,
+          y: e.clientY - svgRect.top - dragOffset.y,
+        };
+      });
+      return updates;
+    });
+  }
+  function onSeatMouseUp() {
+    setDraggedSeats([]);
+    window.removeEventListener("mousemove", onSeatMouseMove);
+    window.removeEventListener("mouseup", onSeatMouseUp);
+  }
+
+  // --- Seat edit modal ---
+  function onEditSeat(seat) {
+    const label = prompt("Set seat label:", seat.label || "");
+    if (label !== null)
+      setSeatData(sd => ({
+        ...sd,
+        [seat.id]: { ...(sd[seat.id] || {}), label },
+      }));
+    const price = prompt("Set price for this seat:", seat.price || "");
+    if (price !== null)
+      setSeatData(sd => ({
+        ...sd,
+        [seat.id]: { ...(sd[seat.id] || {}), price },
+      }));
+    const section = prompt(
+      `Set section for this seat: (${sections.map(s => s.name).join(", ")})`,
+      seat.section || ""
+    );
+    if (section !== null && sections.find(s => s.name === section))
+      setSeatData(sd => ({
+        ...sd,
+        [seat.id]: { ...(sd[seat.id] || {}), section },
+      }));
+  }
+
+  // --- Table controls ---
+  function addTable() {
+    const label = prompt("Table label:", `Table ${tables.length + 1}`);
+    if (!label) return;
+    setTables([
+      ...tables,
+      {
+        label,
+        seatCount: 8,
+        radius: 90,
+        rotation: 0,
+        section: sections[0].name,
+        color: sections[0].color,
+        cx: 350 + (100 * (tables.length % 3)),
+        cy: 200 + (70 * tables.length),
+      },
+    ]);
+  }
+  function removeTable(idx) {
+    setTables(tables.filter((_, i) => i !== idx));
+  }
+  function editTable(idx) {
+    const table = tables[idx];
+    const label = prompt("Table label:", table.label);
+    if (!label) return;
+    const seatCount = parseInt(prompt("Seat count:", table.seatCount) || "8", 10);
+    if (isNaN(seatCount) || seatCount < 1) return;
+    const section = prompt(
+      `Section: (${sections.map(s => s.name).join(", ")})`,
+      table.section
+    );
+    if (!section || !sections.find(s => s.name === section)) return;
+    const color = prompt("Table color (hex):", table.color);
+    setTables(tables.map((t, i) =>
+      i === idx
+        ? { ...t, label, seatCount, section, color }
+        : t
+    ));
+  }
+  function moveTable(idx, dx, dy) {
+    setTables(tables.map((t, i) =>
+      i === idx ? { ...t, cx: t.cx + dx, cy: t.cy + dy } : t
+    ));
+  }
+  function rotateTable(idx, delta) {
+    setTables(tables.map((t, i) =>
+      i === idx ? { ...t, rotation: t.rotation + delta } : t
+    ));
+  }
+
+  // --- Export/Import JSON ---
+  function exportLayout() {
+    const data = {
+      tables,
+      seatData,
+      sections,
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+    const downloadAnchorNode = document.createElement("a");
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "table_seatmap.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  }
+  function importLayout(evt) {
+    const file = evt.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = event => {
+      try {
+        const data = JSON.parse(event.target.result);
+        setTables(data.tables || []);
+        setSeatData(data.seatData || {});
+        setSections(data.sections || DEFAULT_SECTIONS);
+      } catch (err) {
+        alert("Invalid JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // --- Section controls ---
+  function addSection() {
+    const name = prompt("Section name:");
+    const color = prompt("Section color (hex):", "#1976d2");
+    if (name && color) setSections([...sections, { name, color }]);
+  }
+
+  // --- UI ---
+  return (
+    <div style={{ display: "flex", gap: 32 }}>
+      <div style={{ minWidth: 290 }}>
+        <h3>Table Seatmap Designer</h3>
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={addTable}>Add Table</button>
+        </div>
+        {tables.map((table, idx) => (
+          <div key={table.label} style={{ marginBottom: 10, background: "#f5fafd", borderRadius: 8, padding: 10 }}>
+            <strong style={{ color: table.color }}>{table.label}</strong> ({table.seatCount} seats)
+            <br />
+            Section: <span style={{ color: table.color }}>{table.section}</span>
+            <div>
+              <button onClick={() => editTable(idx)}>Edit</button>
+              <button onClick={() => removeTable(idx)} style={{ marginLeft: 8 }}>Remove</button>
+              <button onClick={() => moveTable(idx, -20, 0)} style={{ marginLeft: 8 }}>←</button>
+              <button onClick={() => moveTable(idx, 20, 0)}>→</button>
+              <button onClick={() => moveTable(idx, 0, -20)}>↑</button>
+              <button onClick={() => moveTable(idx, 0, 20)}>↓</button>
+              <button onClick={() => rotateTable(idx, Math.PI / 16)} style={{ marginLeft: 8 }}>⟳</button>
+              <button onClick={() => rotateTable(idx, -Math.PI / 16)}>⟲</button>
+            </div>
+          </div>
+        ))}
+        <div style={{ marginTop: 14 }}>
+          <button onClick={exportLayout}>Export Layout as JSON</button>
+          <input type="file" accept="application/json" onChange={importLayout} style={{ marginLeft: 10 }} />
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <strong>Sections:</strong>{" "}
+          <button type="button" onClick={addSection}>Add Section</button>
+          <ul style={{ fontSize: 13, marginTop: 8, paddingLeft: 20 }}>
+            {sections.map(s => (
+              <li key={s.name} style={{ color: s.color }}>
+                {s.name} <span style={{ background: s.color, color: "#fff", padding: "0 8px", borderRadius: 4 }}>{s.color}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div style={{ marginTop: 18, color: "#666", fontSize: 13 }}>
+          <strong>Tips:</strong>
+          <ul style={{ marginTop: 6 }}>
+            <li>Click seat: select</li>
+            <li>Shift+Click: edit seat (label, price, section)</li>
+            <li>Ctrl/Cmd+Click: multi-select</li>
+            <li>Drag seat (or multi-selection): move</li>
+            <li>⟳⟲: rotate table</li>
+          </ul>
+        </div>
+      </div>
+      <svg
+        ref={svgRef}
+        width={800}
+        height={550}
+        style={{ background: "#f2f4fa", borderRadius: 20, border: "1px solid #ddd" }}
+      >
+        {/* Tables */}
+        {tables.map(table => (
+          <g key={table.label}>
+            <circle
+              cx={table.cx}
+              cy={table.cy}
+              r={table.radius}
+              fill={table.color}
+              opacity={0.18}
+              stroke={table.color}
+              strokeWidth={3}
+            />
+            <text
+              x={table.cx}
+              y={table.cy}
+              textAnchor="middle"
+              fill={table.color}
+              fontWeight="bold"
+              fontSize={18}
+              dy={7}
+              style={{ paintOrder: "stroke fill" }}
+            >
+              {table.label}
+            </text>
+          </g>
+        ))}
+        {/* Seats */}
+        {seats.map(seat => {
+          const sectionObj = sections.find(s => s.name === seat.section) || { color: "#fff" };
+          return (
+            <g key={seat.id}>
+              <circle
+                cx={seat.x}
+                cy={seat.y}
+                r={15}
+                fill={selected.includes(seat.id) ? "#1976d2" : sectionObj.color}
+                stroke="#444"
+                strokeWidth={selected.includes(seat.id) ? 3 : 1.5}
+                style={{ cursor: "pointer" }}
+                onClick={e => {
+                  if (e.shiftKey) onEditSeat(seat);
+                  else if (e.ctrlKey || e.metaKey) {
+                    setSelected(sel =>
+                      sel.includes(seat.id) ? sel.filter(id => id !== seat.id) : [...sel, seat.id]
+                    );
+                  } else {
+                    setSelected([seat.id]);
+                  }
+                }}
+                onMouseDown={e => onSeatMouseDown(seat, e)}
+              />
+              <text
+                x={seat.x}
+                y={seat.y + 5}
+                textAnchor="middle"
+                fontSize={12}
+                fill={selected.includes(seat.id) ? "#fff" : "#222"}
+                pointerEvents="none"
+                style={{ fontWeight: 700 }}
+              >
+                {seat.label}
+              </text>
+              <text
+                x={seat.x}
+                y={seat.y + 17}
+                textAnchor="middle"
+                fontSize={10}
+                fill="#555"
+                pointerEvents="none"
+                style={{ fontWeight: 500 }}
+              >
+                ${seat.price}
+              </text>
+              <text
+                x={seat.x}
+                y={seat.y - 12}
+                textAnchor="middle"
+                fontSize={9}
+                fill={sectionObj.color}
+                stroke="#fff"
+                strokeWidth={0.8}
+                style={{ fontWeight: 700, paintOrder: "stroke fill" }}
+                pointerEvents="none"
+              >
+                {seat.section}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}import React, { useEffect, useState } from "react";
+import {
+  Card, CardContent, CardActionArea, CardMedia, Typography, Grid, Chip, Box, IconButton,
+  Fab, Tooltip, InputAdornment, TextField, Dialog, DialogTitle, DialogActions, DialogContent, Button, Snackbar, Stack, Skeleton, Tabs, Tab, Divider
+} from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import SearchIcon from "@mui/icons-material/Search";
+import PlaceIcon from "@mui/icons-material/Place";
+import PeopleIcon from "@mui/icons-material/People";
+import EventSeatIcon from "@mui/icons-material/EventSeat";
+import { fetchVenues, createVenue, updateVenue, deleteVenue } from "../api/venueApi";
+
+// Dummy imports for illustration; you should implement these components
+import SectionList from "./SectionList"; // Venue → Sections → Seats
+import AnalyticsPanel from "./AnalyticsPanel.jsx"; // Optional: Analytics tab
+import VenueDesignerChooser from "./VenueDesignerChooser";
+
+function VenueDialog({ open, venue, onClose, onSave }) {
+  const safeVenue = venue
+    ? { ...venue, amenities: Array.isArray(venue.amenities) ? venue.amenities : [] }
+    : { name: "", address: "", city: "", country: "", capacity: "", amenities: [], map_image_url: "" };
+
+  const [form, setForm] = useState(safeVenue);
+  React.useEffect(() => {
+    const safeVenue = venue
+      ? { ...venue, amenities: Array.isArray(venue.amenities) ? venue.amenities : [] }
+      : { name: "", address: "", city: "", country: "", capacity: "", amenities: [], map_image_url: "" };
+    setForm(safeVenue);
+  }, [venue, open]);
+
+  const [amenityInput, setAmenityInput] = useState("");
+  const addAmenity = () => {
+    if (amenityInput) {
+      setForm(f => ({
+        ...f,
+        amenities: [...(Array.isArray(f.amenities) ? f.amenities : []), amenityInput]
+      }));
+      setAmenityInput("");
+    }
+  };
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{venue ? "Edit Venue" : "Add Venue"}</DialogTitle>
+      <DialogContent>
+        <TextField label="Venue Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} fullWidth required sx={{ mb: 2 }} />
+        <TextField label="Venue Image URL" value={form.map_image_url} onChange={e => setForm(f => ({ ...f, map_image_url: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="Address" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="City" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="Country" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} fullWidth sx={{ mb: 2 }} />
+        <TextField label="Capacity" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} fullWidth type="number" sx={{ mb: 2 }} />
+        <Box sx={{ mt: 1 }}>
+          Amenities: {(Array.isArray(form.amenities) ? form.amenities : []).map((a, i) => (
+            <Chip key={i} label={a} onDelete={() => setForm(f => ({
+              ...f,
+              amenities: (Array.isArray(f.amenities) ? f.amenities : []).filter((_, j) => i !== j)
+            }))} sx={{ mr: 1, mb: 1 }} />
+          ))}
+        </Box>
+        <Box sx={{ display: "flex", mt: 1, alignItems: "center" }}>
+          <TextField label="Add Amenity" value={amenityInput} onChange={e => setAmenityInput(e.target.value)} size="small" />
+          <Button onClick={addAmenity} sx={{ ml: 1 }}>Add</Button>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => onSave(form)} disabled={!form.name}>Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function ConfirmDialog({ open, onClose, onConfirm, message }) {
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Are you sure?</DialogTitle>
+      <DialogContent>
+        <Typography>{message}</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button color="error" variant="contained" onClick={onConfirm}>Delete</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function VenueTabs({ venue, onReload }) {
+  const [tab, setTab] = useState(0);
+  return (
+    <Box sx={{ mt: 4 }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} aria-label="venue-tabs" variant="fullWidth">
+        <Tab label="Sections & Seats" />
+        <Tab label="Analytics" />
+        {/* Add more tabs as needed */}
+      </Tabs>
+      <Divider sx={{ mb: 3 }} />
+      <Box>
+        {tab === 0 && (
+          <VenueDesignerChooser venueId={venue.id} venueType={venue.type} />
+        )}
+        {tab === 1 && (
+          <AnalyticsPanel venueId={venue.id} />
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+export default function VenueCardList() {
+  const [venues, setVenues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingVenue, setEditingVenue] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [venueToDelete, setVenueToDelete] = useState(null);
+  const [snack, setSnack] = useState("");
+  const [search, setSearch] = useState("");
+  const [selectedVenue, setSelectedVenue] = useState(null);
+
+  // Updated loadVenues with guard for undefined data
+  const loadVenues = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchVenues();
+      if (!data || !Array.isArray(data)) {
+        setVenues([]);
+        setSnack("No venues found or not authenticated.");
+        return;
+      }
+      const venuesWithParsedAmenities = data.map(v => ({
+        ...v,
+        amenities: Array.isArray(v.amenities)
+          ? v.amenities
+          : typeof v.amenities === "string"
+            ? (() => {
+                try {
+                  const parsed = JSON.parse(v.amenities);
+                  return Array.isArray(parsed) ? parsed : [];
+                } catch {
+                  return [];
+                }
+              })()
+            : [],
+      }));
+      setVenues(venuesWithParsedAmenities);
+    } catch (err) {
+      console.error("Failed to load venues", err);
+      setSnack("Failed to load venues");
+      setVenues([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadVenues();
+  }, []);
+
+  const filteredVenues = venues.filter(v =>
+    v.name?.toLowerCase().includes(search.toLowerCase()) ||
+    (v.city || "").toLowerCase().includes(search.toLowerCase()) ||
+    (v.country || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleAdd = () => {
+    setEditingVenue(null);
+    setShowDialog(true);
+  };
+  const handleEdit = (venue) => {
+    setEditingVenue(venue);
+    setShowDialog(true);
+  };
+  const handleSave = async (venue) => {
+    try {
+      const venueToSave = {
+        ...venue,
+        amenities: JSON.stringify(Array.isArray(venue.amenities) ? venue.amenities : []),
+      };
+      if (venue.id) {
+        await updateVenue(venue.id, venueToSave);
+        setSnack("Venue updated!");
+      } else {
+        await createVenue(venueToSave);
+        setSnack("Venue created!");
+      }
+      setShowDialog(false);
+      await loadVenues();
+    } catch (err) {
+      console.error("Error saving venue:", err);
+      setSnack("Error saving venue");
+    }
+  };
+  const handleDelete = async () => {
+    try {
+      await deleteVenue(venueToDelete.id);
+      setSnack("Venue deleted!");
+      setShowConfirm(false);
+      await loadVenues();
+      setSelectedVenue(null);
+    } catch (err) {
+      console.error("Could not delete venue:", err);
+      setSnack("Could not delete venue");
+    }
+  };
+
+  // "Oveit" style: venue details with tabs overlays the card list, with a back button
+  if (selectedVenue) {
+    const venue = venues.find(v => v.id === selectedVenue);
+    return (
+      <Box sx={{ mt: 3 }}>
+        <Button onClick={() => setSelectedVenue(null)} variant="text" sx={{ mb: 2 }}>
+          &larr; Back to Venues
+        </Button>
+        <Card elevation={6} sx={{ maxWidth: 900, mx: "auto", mb: 4, borderRadius: 4, overflow: "visible" }}>
+          <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "stretch" }}>
+            {venue?.map_image_url ? (
+              <CardMedia
+                component="img"
+                sx={{ width: { xs: "100%", md: 320 }, height: 240, objectFit: "cover", borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }}
+                image={venue.map_image_url}
+                alt={venue.name}
+              />
+            ) : (
+              <Box sx={{
+                width: { xs: "100%", md: 320 },
+                height: 240,
+                bgcolor: "grey.100",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderTopLeftRadius: 16,
+                borderBottomLeftRadius: 16
+              }}>
+                <EventSeatIcon color="disabled" sx={{ fontSize: 60 }} />
+              </Box>
+            )}
+            <CardContent sx={{ flex: 1 }}>
+              <Box display="flex" alignItems="center" justifyContent="space-between">
+                <Typography variant="h5" fontWeight={700}>{venue?.name}</Typography>
+                <Box>
+                  <Tooltip title="Edit">
+                    <IconButton onClick={() => handleEdit(venue)}>
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton onClick={() => { setVenueToDelete(venue); setShowConfirm(true); }}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
+              <Stack direction="row" alignItems="center" spacing={1} mt={1} mb={1}>
+                <PlaceIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  {venue?.address}, {venue?.city}, {venue?.country}
+                </Typography>
+              </Stack>
+              <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                <PeopleIcon fontSize="small" color="action" />
+                <Typography variant="caption" color="text.secondary">
+                  Capacity: {venue?.capacity}
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={1} flexWrap="wrap" mt={2}>
+                {venue?.amenities?.map((a, i) => (
+                  <Chip
+                    key={i}
+                    label={a}
+                    size="small"
+                    color="primary"
+                    variant="soft"
+                    sx={{ mb: 0.5, fontSize: 12 }}
+                  />
+                ))}
+              </Stack>
+            </CardContent>
+          </Box>
+          <VenueTabs venue={venue} onReload={loadVenues} />
+        </Card>
+        <ConfirmDialog
+          open={showConfirm}
+          onClose={() => setShowConfirm(false)}
+          onConfirm={handleDelete}
+          message={`Delete venue "${venueToDelete?.name}"? This cannot be undone.`}
+        />
+        <VenueDialog
+          open={showDialog}
+          venue={editingVenue}
+          onClose={() => setShowDialog(false)}
+          onSave={handleSave}
+        />
+        <Snackbar open={!!snack} autoHideDuration={3000} onClose={() => setSnack("")} message={snack} />
+      </Box>
+    );
+  }
+
+  // Main venue grid
+  return (
+    <Box sx={{ position: "relative", pb: 8, mt: { xs: 3, md: 5 }, px: { xs: 1, md: 3 } }}>
+      <Box display="flex" alignItems="center" mb={3} mt={1} justifyContent="space-between">
+        <Typography variant="h4" fontWeight={700} color="primary.main">
+          Venues
+        </Typography>
+        <TextField
+          type="search"
+          variant="outlined"
+          placeholder="Search venues, city or country"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          size="small"
+          sx={{ width: "100%", maxWidth: 400, ml: 2 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            )
+          }}
+        />
+        <Button startIcon={<AddIcon />} variant="contained" color="primary" sx={{ ml: 2 }} onClick={handleAdd}>
+          Add Venue
+        </Button>
+      </Box>
+      <Grid container spacing={3}>
+        {loading ? (
+          [1, 2, 3].map(i => (
+            <Grid item xs={12} md={6} lg={4} key={i}>
+              <Card sx={{ borderRadius: 4, boxShadow: 3 }}>
+                <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 4 }} />
+                <CardContent>
+                  <Skeleton width="60%" />
+                  <Skeleton width="40%" />
+                  <Skeleton width="80%" />
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        ) : filteredVenues.length === 0 ? (
+          <Grid item xs={12}>
+            <Box textAlign="center" mt={6}>
+              <EventSeatIcon color="disabled" sx={{ fontSize: 60, mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                No venues found.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Please add a venue to get started.
+              </Typography>
+            </Box>
+          </Grid>
+        ) : (
+          filteredVenues.map((venue) => (
+            <Grid item xs={12} sm={6} md={4} key={venue.id}>
+              <Card
+                elevation={6}
+                sx={{
+                  borderRadius: 4,
+                  overflow: "hidden",
+                  minHeight: 340,
+                  display: "flex",
+                  flexDirection: "column",
+                  position: "relative",
+                  boxShadow: 6,
+                  transition: "box-shadow 0.2s, transform 0.2s",
+                  "&:hover": {
+                    boxShadow: 12,
+                    transform: "translateY(-4px) scale(1.01)",
+                  },
+                  bgcolor: "background.paper"
+                }}
+              >
+                <Box sx={{
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  zIndex: 2,
+                  display: 'flex',
+                  gap: 1,
+                  bgcolor: 'rgba(255,255,255,0.85)',
+                  borderRadius: 2,
+                  boxShadow: 1,
+                  p: 0.5
+                }}>
+                  <Tooltip title="Edit">
+                    <IconButton size="small" onClick={e => { e.stopPropagation(); handleEdit(venue); }}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton size="small" onClick={e => { e.stopPropagation(); setVenueToDelete(venue); setShowConfirm(true); }}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <CardActionArea
+                  onClick={() => setSelectedVenue(venue.id)}
+                  sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "stretch" }}
+                >
+                  {venue.map_image_url ? (
+                    <CardMedia
+                      component="img"
+                      height="180"
+                      image={venue.map_image_url}
+                      alt={venue.name}
+                      sx={{ objectFit: "cover", width: "100%" }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        height: 180,
+                        bgcolor: "grey.100",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%"
+                      }}
+                    >
+                      <EventSeatIcon color="disabled" sx={{ fontSize: 60 }} />
+                    </Box>
+                  )}
+                  <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={700} gutterBottom noWrap>
+                        {venue.name}
+                      </Typography>
+                      <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+                        <PlaceIcon fontSize="small" color="action" />
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {venue.address}, {venue.city}
+                        </Typography>
+                      </Stack>
+                      <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+                        <PeopleIcon fontSize="small" color="action" />
+                        <Typography variant="caption" color="text.secondary">
+                          Capacity: {venue.capacity}
+                        </Typography>
+                      </Stack>
+                    </Box>
+                    {venue.amenities?.length > 0 && (
+                      <Stack direction="row" spacing={1} flexWrap="wrap" mt={2}>
+                        {venue.amenities.map((a, i) => (
+                          <Chip
+                            key={i}
+                            label={a}
+                            size="small"
+                            color="primary"
+                            variant="soft"
+                            sx={{ mb: 0.5, fontSize: 12 }}
+                          />
+                        ))}
+                      </Stack>
+                    )}
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          ))
+        )}
+      </Grid>
+      <VenueDialog
+        open={showDialog}
+        venue={editingVenue}
+        onClose={() => setShowDialog(false)}
+        onSave={handleSave}
+      />
+      <ConfirmDialog
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleDelete}
+        message={`Delete venue "${venueToDelete?.name}"? This cannot be undone.`}
+      />
+      <Snackbar open={!!snack} autoHideDuration={3000} onClose={() => setSnack("")} message={snack} />
+      <Tooltip title="Add Venue">
+        <Fab
+          color="primary"
+          sx={{
+            position: "fixed",
+            bottom: 32,
+            right: 32,
+            zIndex: 2000,
+            boxShadow: 4
+          }}
+          onClick={handleAdd}
+          aria-label="Add venue"
+        >
+          <AddIcon />
+        </Fab>
+      </Tooltip>
+    </Box>
+  );
+}import React, { useState } from "react";
+import { Box, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import SeatMapDesigner from "./SeatMapDesigner";
+import AdvancedVenueDesigner from "./AdvancedVenueDesigner";
+import TableSeatMapDesigner from "./TableSeatMapDesigner";
+
+export default function VenueDesignerChooser({ venueId, venueType }) {
+  let defaultDesigner = "seatmap";
+  if (venueType === "stadium") defaultDesigner = "advanced";
+  if (venueType === "banquet" || venueType === "table") defaultDesigner = "table";
+  const [designer, setDesigner] = useState(defaultDesigner);
+
+  return (
+    <Box>
+      <Typography variant="h6" sx={{ mb: 2 }}>Choose a seat designer:</Typography>
+      <ToggleButtonGroup
+        value={designer}
+        exclusive
+        onChange={(_, val) => val && setDesigner(val)}
+        sx={{ mb: 3 }}
+      >
+        <ToggleButton value="seatmap">Seatmap Designer</ToggleButton>
+        <ToggleButton value="advanced">Stadium Designer</ToggleButton>
+        <ToggleButton value="table">Banquet/Table Designer</ToggleButton>
+      </ToggleButtonGroup>
+      <Box sx={{ mt: 2 }}>
+        {designer === "seatmap" && <SeatMapDesigner venueId={venueId} />}
+        {designer === "advanced" && <AdvancedVenueDesigner venueId={venueId} />}
+        {designer === "table" && <TableSeatMapDesigner venueId={venueId} />}
+      </Box>
+    </Box>
+  );
+}
+import React, { useEffect, useState } from 'react';
+import { fetchVenue } from '../api/venueApi';
+import SectionList from './SectionList';
+
+export default function VenueDetails({ venueId }) {
+  const [venue, setVenue] = useState(null);
+
+  useEffect(() => {
+    if (venueId) fetchVenue(venueId).then(setVenue);
+  }, [venueId]);
+
+  if (!venue) return <div>Select a venue</div>;
+
+  return (
+    <div>
+      <h2>{venue.name}</h2>
+      <p>{venue.address}, {venue.city}, {venue.country}</p>
+      <p>Capacity: {venue.capacity}</p>
+      <SectionList venueId={venue.id} />
+      {/* Add SeatMapDesigner here for admin, or SeatMapSelector for buyers */}
+    </div>
+  );
+}import React, { useEffect, useState } from 'react';
+import { Card, CardContent, CardActions, Typography, Button, Grid, Box, CircularProgress } from '@mui/material';
+import { fetchSeats, deleteSeat } from '../services/seatService';
+
+const SectionSeats = ({ sectionId }) => {
+  const [seats, setSeats] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadSeats = async () => {
+    setLoading(true);
+    const data = await fetchSeats(sectionId);
+    setSeats(data);
+    setLoading(false);
+  };
+  useEffect(() => {
+    if (sectionId) {
+      loadSeats();
+    }
+  }, [sectionId]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Delete this seat?')) {
+      await deleteSeat(id);
+      loadSeats();
+    }
+  };
+
+  if (loading) return <Box display="flex" justifyContent="center"><CircularProgress /></Box>;
+
+  return (
+    <Box p={2}>
+      <Typography variant="h5" gutterBottom>Seats</Typography>
+      <Grid container spacing={2}>
+        {seats.map((seat) => (
+          <Grid item xs={12} md={4} key={seat.id}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6">{seat.label}</Typography>
+                <Typography variant="body2">Row: {seat.row}, No: {seat.number}</Typography>
+                <Typography variant="body2">Type: {seat.type}</Typography>
+                <Typography variant="body2">Status: {seat.status}</Typography>
+              </CardContent>
+              <CardActions>
+                {/* Add Edit/Delete buttons as needed */}
+                <Button size="small" color="error" onClick={() => handleDelete(seat.id)}>Delete</Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </Box>
+  );
+};
+
+export default SectionSeats;import React, { useEffect, useState } from 'react';
+import { fetchEventSeatMap, holdSeats } from '../services/eventSeatMapService';
+import SeatMap from '../components/SeatMap';
+import { Button, Typography, Box, Alert } from '@mui/material';
+
+const SelectSeats = ({ eventId, userId }) => {
+  const [seats, setSeats] = useState([]);
+  const [selected, setSelected] = useState([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchEventSeatMap(eventId).then(setSeats);
+  }, [eventId]);
+
+  const handleSelect = (seatId) => {
+    setSelected(
+      selected.includes(seatId)
+        ? selected.filter(id => id !== seatId)
+        : [...selected, seatId]
+    );
+  };
+
+  const handleHold = async () => {
+    setError('');
+    try {
+      const result = await holdSeats(eventId, selected, userId);
+      if (result.taken) {
+        setError('Some seats are no longer available.');
+        fetchEventSeatMap(eventId).then(setSeats);
+      } else {
+        // Proceed to checkout/payment
+        window.alert('Seats held! Continue to payment.');
+      }
+    } catch (e) {
+      setError('Error holding seats.');
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="h5">Select Your Seats</Typography>
+      {error && <Alert severity="error">{error}</Alert>}
+      <SeatMap seats={seats} selected={selected} onSelect={handleSelect} />
+      <Button variant="contained" disabled={!selected.length} onClick={handleHold}>
+        Hold & Continue
+      </Button>
+    </Box>
+  );
+};
+
+export default SelectSeats;import React, { useEffect, useState } from 'react';
+import {
+  Typography, Box, Card, CardContent, CardHeader, CircularProgress,
+  Button, Grid, Snackbar, Alert, Dialog, DialogTitle, DialogContent,
+  DialogActions, TextField, TablePagination, InputBase, Paper
+} from '@mui/material';
+import { fetchVenues, deleteVenue, createVenue } from '../services/venueService';
+
+export default function Venues() {
+  const [venues, setVenues] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: '', address: '', city: '', country: '', capacity: ''
+  });
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [search, setSearch] = useState('');
+
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(6);
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const loadVenues = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchVenues();
+      setVenues(data || []);
+    } catch (e) {
+      showSnackbar('Failed to load venues', 'error');
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadVenues(); }, []);
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Delete this venue?')) {
+      try {
+        await deleteVenue(id);
+        showSnackbar('Venue deleted');
+        loadVenues();
+      } catch {
+        showSnackbar('Failed to delete venue', 'error');
+      }
+    }
+  };
+
+  const handleOpen = () => setOpen(true);
+  const handleClose = () => {
+    setOpen(false);
+    setForm({ name: '', address: '', city: '', country: '', capacity: '' });
+  };
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleAddVenue = async () => {
+    try {
+      await createVenue({ ...form, capacity: Number(form.capacity) });
+      showSnackbar('Venue added');
+      handleClose();
+      loadVenues();
+    } catch {
+      showSnackbar('Failed to add venue', 'error');
+    }
+  };
+
+  // Pagination handlers
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Filter venues by search
+  const filteredVenues = venues.filter(v =>
+    v.name.toLowerCase().includes(search.toLowerCase()) ||
+    v.city.toLowerCase().includes(search.toLowerCase()) ||
+    v.country.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <Box p={4}>
+      {/* Top card with Add button and search filter */}
+      <Card sx={{ mb: 3, maxWidth: "100%", boxShadow: 3 }}>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Paper
+            component="form"
+            sx={{ flex: 1, p: '2px 8px', display: 'flex', alignItems: 'center' }}
+            onSubmit={e => e.preventDefault()}
+          >
+            <InputBase
+              sx={{ ml: 1, flex: 1 }}
+              placeholder="Search venues"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              inputProps={{ 'aria-label': 'search venues' }}
+            />
+          </Paper>
+          <Button variant="contained" color="primary" onClick={handleOpen}>
+            Add Venue
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ maxWidth: "100%", boxShadow: 3 }}>
+        <CardHeader
+          title={<Typography variant="h4" fontWeight="bold">Venues</Typography>}
+        />
+        <CardContent>
+          {loading ? (
+            <Box display="flex" justifyContent="center" py={5}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              <Grid container spacing={2}>
+                {filteredVenues.length === 0 ? (
+                  <Grid item xs={12}>
+                    <Typography align="center">No venues found.</Typography>
+                  </Grid>
+                ) : (
+                  filteredVenues
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((venue) => (
+                      <Grid item xs={12} md={6} lg={4} key={venue.id}>
+                        <Card variant="outlined">
+                          <CardContent>
+                            <Typography variant="h6">{venue.name}</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {venue.address}, {venue.city}, {venue.country}
+                            </Typography>
+                            <Typography variant="body2">Capacity: {venue.capacity}</Typography>
+                            {venue.amenities && (
+                              <Typography variant="body2">
+                                Amenities: {Object.keys(venue.amenities).join(', ')}
+                              </Typography>
+                            )}
+                          </CardContent>
+                          <Box display="flex" justifyContent="flex-end" p={1}>
+                            <Button size="small" href={`/venues/${venue.id}`}>View</Button>
+                            <Button size="small" color="error" onClick={() => handleDelete(venue.id)}>Delete</Button>
+                          </Box>
+                        </Card>
+                      </Grid>
+                    ))
+                )}
+              </Grid>
+              <TablePagination
+                component="div"
+                count={filteredVenues.length}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[6, 12, 24]}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onClose={handleClose}>
+        <DialogTitle>Add Venue</DialogTitle>
+        <DialogContent>
+          <TextField margin="dense" label="Name" name="name" fullWidth value={form.name} onChange={handleChange} />
+          <TextField margin="dense" label="Address" name="address" fullWidth value={form.address} onChange={handleChange} />
+          <TextField margin="dense" label="City" name="city" fullWidth value={form.city} onChange={handleChange} />
+          <TextField margin="dense" label="Country" name="country" fullWidth value={form.country} onChange={handleChange} />
+          <TextField margin="dense" label="Capacity" name="capacity" type="number" fullWidth value={form.capacity} onChange={handleChange} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Cancel</Button>
+          <Button onClick={handleAddVenue} variant="contained" color="primary">Add</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}import React, { useEffect, useState } from "react";
+import { fetchSections, createSection, updateSection, deleteSection } from "../services/venueSectionService";
+import {
+  Grid, Card, CardContent, CardActions, Typography, Button, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Box
+} from "@mui/material";
+
+const SectionForm = ({ open, onClose, initial, onSave }) => {
+  const [section, setSection] = useState(initial || {});
+  useEffect(() => { setSection(initial || {}); }, [initial]);
+  const handleChange = (e) => setSection(s => ({ ...s, [e.target.name]: e.target.value }));
+  const handleSubmit = () => { onSave(section); };
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>{section.id ? "Edit Section" : "Add Section"}</DialogTitle>
+      <DialogContent>
+        <TextField autoFocus margin="dense" name="name" label="Section Name" fullWidth value={section.name||""} onChange={handleChange} />
+        <TextField margin="dense" name="type" label="Type" fullWidth value={section.type||""} onChange={handleChange} />
+        {/* Add more fields as needed */}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained">Save</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const VenueSections = ({ venueId }) => {
+  const [sections, setSections] = useState([]);
+  const [formOpen, setFormOpen] = useState(false);
+  const [selected, setSelected] = useState(null);
+
+  const load = async () => setSections(await fetchSections(venueId));
+  useEffect(() => { if (venueId) load(); }, [venueId]);
+
+  const handleAdd = () => { setSelected(null); setFormOpen(true); };
+  const handleEdit = (s) => { setSelected(s); setFormOpen(true); };
+  const handleDelete = async (id) => { await deleteSection(id); load(); };
+  const handleSave = async (section) => {
+    if (section.id) await updateSection(section.id, section);
+    else await createSection({ ...section, venueId });
+    setFormOpen(false); load();
+  };
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" my={2}>
+        <Typography variant="h5">Sections</Typography>
+        <Button onClick={handleAdd} variant="contained">+ Add Section</Button>
+      </Box>
+      <Grid container spacing={2}>
+        {sections.map(s => (
+          <Grid item xs={12} md={6} lg={4} key={s.id}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6">{s.name}</Typography>
+                <Typography color="text.secondary">{s.type}</Typography>
+              </CardContent>
+              <CardActions>
+                <Button size="small" onClick={() => handleEdit(s)}>Edit</Button>
+                <Button size="small" color="error" onClick={() => handleDelete(s.id)}>Delete</Button>
+                <Button size="small" href={`/section-seats?sectionId=${s.id}`}>Seats</Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+      <SectionForm open={formOpen} onClose={() => setFormOpen(false)} initial={selected} onSave={handleSave} />
+    </Box>
+  );
+};
+
+export default VenueSections;
